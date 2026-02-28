@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { X, ShoppingCart, Star, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
@@ -20,14 +21,21 @@ const Stars = ({ rating }) => (
   </span>
 );
 
+const PLACEHOLDER = 'https://res.cloudinary.com/dltp00ewe/image/upload/v1772005066/alex-munsell-Yr4n8O_3UPc-unsplash_peadau.jpg';
+
 const FoodModal = ({ item, onClose, restaurantId = null }) => {
-  const images   = item.images?.length ? item.images : (item.image ? [item.image] : []);
-  const variants = Array.isArray(item.variants) ? item.variants : [];
-  const addonOptions = Array.isArray(item.addons) ? item.addons : [];
+  // Safe images array — always an array of non-empty strings
+  const rawImages = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+  const images    = rawImages.length > 0 ? rawImages : (item.image ? [item.image] : [PLACEHOLDER]);
+
+  const variants     = Array.isArray(item.variants) ? item.variants : [];
+  const addonOptions = Array.isArray(item.addons)   ? item.addons   : [];
 
   const [visible,         setVisible        ] = useState(false);
   const [added,           setAdded          ] = useState(false);
   const [imgIdx,          setImgIdx         ] = useState(0);
+  // imgSrc tracks the displayed URL for the current slide; resets on slide change
+  const [imgSrc,          setImgSrc         ] = useState(images[0] ?? PLACEHOLDER);
   const [selectedVariant, setSelectedVariant] = useState(variants[0] ?? null);
   const [selectedAddons,  setSelectedAddons ] = useState([]);
 
@@ -55,8 +63,22 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
   }, [handleClose]);
 
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    // Save exact scroll position, then pin the body so the page doesn't
+    // jump or shift while the modal is open.
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top      = `-${scrollY}px`;
+    document.body.style.width    = '100%';
+    document.body.style.overflowY = 'scroll'; // keep scrollbar width so layout doesn't shift
+
+    return () => {
+      // Unpin and restore the exact scroll position.
+      document.body.style.position  = '';
+      document.body.style.top       = '';
+      document.body.style.width     = '';
+      document.body.style.overflowY = '';
+      window.scrollTo(0, scrollY);
+    };
   }, []);
 
   const toggleAddon = (addon) => {
@@ -90,7 +112,7 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
     setTimeout(() => navigate(cartPath), 270);
   };
 
-  return (
+  const content = (
     <>
       <style>{`
         @keyframes modalOverlayIn  { from { opacity:0 } to { opacity:1 } }
@@ -104,8 +126,8 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
         .fm-x-btn { transition: background-color 0.2s ease; }
         .fm-x-btn:hover { background-color: rgba(0,0,0,0.70) !important; }
         .fm-variant-btn { transition: all 0.15s ease; cursor: pointer; }
-        .fm-addon-row { display: flex; align-items: center; gap: 10; padding: 8px 0; border-bottom: 1px solid ${T.border}; }
-        .fm-addon-row:last-child { border-bottom: none; }
+        .fm-addon-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid ${T.border}; }
+        .fm-addon-row:last-child { border-bottom: none; padding-bottom: 4px; }
       `}</style>
 
       {/* Overlay */}
@@ -118,121 +140,121 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
           backdropFilter: 'blur(6px)',
           WebkitBackdropFilter: 'blur(6px)',
           animation: `${visible ? 'modalOverlayIn' : 'modalOverlayOut'} 0.26s ease forwards`,
-          padding: '16px',
+          padding: '40px 48px',          /* balanced margin on all 4 sides */
         }}
       >
-        {/* Card */}
+        {/* Modal card — two-column, fully contained in viewport */}
         <div
           onClick={(e) => e.stopPropagation()}
           className="bg-white rounded-2xl w-full"
           style={{
             position: 'relative',
-            maxWidth: 760,
+            maxWidth: 880,
+            width: '100%',
+            maxHeight: 'calc(100vh - 80px)',  /* never taller than viewport */
+            display: 'flex',
+            flexDirection: 'row',
+            overflow: 'hidden',               /* clip both columns */
             boxShadow: '0 28px 64px rgba(0,0,0,0.24)',
             animation: `${visible ? 'modalCardIn' : 'modalCardOut'} 0.28s cubic-bezier(.4,0,.2,1) forwards`,
-            maxHeight: '92vh',
-            overflowY: 'auto',
           }}
           role="dialog"
           aria-modal="true"
           aria-label={item.name}
         >
-          {/* Close × */}
-          <button
-            onClick={handleClose}
-            className="fm-x-btn absolute flex items-center justify-center rounded-full"
-            style={{
-              top: 14, right: 14, zIndex: 10,
-              width: 36, height: 36,
-              backgroundColor: 'rgba(0,0,0,0.42)',
-              border: 'none', cursor: 'pointer',
-              color: '#fff', backdropFilter: 'blur(4px)',
-            }}
-            aria-label="Close"
-          >
-            <X size={17} />
-          </button>
-
-          {/* Image carousel */}
-          <div style={{ padding: '16px 16px 0', position: 'relative' }}>
-            <div className="relative overflow-hidden w-full" style={{ aspectRatio: '16/9', borderRadius: 14, background: '#F3F4F6' }}>
-              {images.length > 0 ? (
-                <img
-                  key={images[imgIdx]}
-                  src={images[imgIdx]}
-                  alt={item.name}
-                  loading="lazy"
-                  crossOrigin="anonymous"
-                  className="w-full h-full object-cover block"
-                  onError={(e) => { e.currentTarget.style.opacity = '0'; }}
-                />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ShoppingCart size={48} color="#D1D5DB" />
-                </div>
-              )}
-              {item.badge && (
-                <span
-                  className="absolute top-3 left-3"
-                  style={{
-                    backgroundColor: T.primary, color: '#fff',
-                    fontSize: 11, fontWeight: 700, letterSpacing: '0.8px',
-                    textTransform: 'uppercase', padding: '4px 12px', borderRadius: 4,
+          {/* ── LEFT: image column (close button lives here so it never overlaps price) ── */}
+          <div style={{ width: 300, flexShrink: 0, position: 'relative', background: '#F3F4F6' }}>
+            {/* Close × — anchored to image column, clear of the price */}
+            <button
+              onClick={handleClose}
+              className="fm-x-btn absolute flex items-center justify-center rounded-full"
+              style={{
+                top: 12, right: 12, zIndex: 10,
+                width: 34, height: 34,
+                backgroundColor: 'rgba(0,0,0,0.46)',
+                border: 'none', cursor: 'pointer',
+                color: '#fff', backdropFilter: 'blur(4px)',
+              }}
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+            <img
+              src={imgSrc}
+              alt={item.name ?? 'Menu item'}
+              loading="lazy"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'opacity 0.2s ease' }}
+              onError={() => setImgSrc(PLACEHOLDER)}
+            />
+            {item.badge && (
+              <span
+                className="absolute top-3 left-3"
+                style={{
+                  backgroundColor: T.primary, color: '#fff',
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.8px',
+                  textTransform: 'uppercase', padding: '4px 12px', borderRadius: 4,
+                }}
+              >
+                {item.badge}
+              </span>
+            )}
+            {/* Carousel arrows */}
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={() => {
+                    const next = (imgIdx - 1 + images.length) % images.length;
+                    setImgIdx(next);
+                    setImgSrc(images[next]);
                   }}
+                  style={{
+                    position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%',
+                    width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', color: '#fff',
+                  }}
+                  aria-label="Previous image"
                 >
-                  {item.badge}
-                </span>
-              )}
-              {/* Carousel arrows */}
-              {images.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setImgIdx((i) => (i - 1 + images.length) % images.length)}
-                    style={{
-                      position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-                      background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%',
-                      width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'pointer', color: '#fff',
-                    }}
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    onClick={() => setImgIdx((i) => (i + 1) % images.length)}
-                    style={{
-                      position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                      background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%',
-                      width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'pointer', color: '#fff',
-                    }}
-                    aria-label="Next image"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                  {/* Dots */}
-                  <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5 }}>
-                    {images.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setImgIdx(i)}
-                        style={{
-                          width: i === imgIdx ? 18 : 7, height: 7, borderRadius: 4,
-                          background: i === imgIdx ? T.primary : 'rgba(255,255,255,0.7)',
-                          border: 'none', cursor: 'pointer', padding: 0,
-                          transition: 'all 0.2s ease',
-                        }}
-                        aria-label={`Image ${i + 1}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => {
+                    const next = (imgIdx + 1) % images.length;
+                    setImgIdx(next);
+                    setImgSrc(images[next]);
+                  }}
+                  style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%',
+                    width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', color: '#fff',
+                  }}
+                  aria-label="Next image"
+                >
+                  <ChevronRight size={16} />
+                </button>
+                {/* Dots */}
+                <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5 }}>
+                  {images.map((url, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setImgIdx(i); setImgSrc(url); }}
+                      style={{
+                        width: i === imgIdx ? 18 : 7, height: 7, borderRadius: 4,
+                        background: i === imgIdx ? T.primary : 'rgba(255,255,255,0.7)',
+                        border: 'none', cursor: 'pointer', padding: 0,
+                        transition: 'all 0.2s ease',
+                      }}
+                      aria-label={`Image ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Body */}
-          <div style={{ padding: '24px 24px 28px' }}>
+          {/* ── RIGHT: scrollable details column ── */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px 24px' }}>
 
             {/* Title + computed price */}
             <div className="flex items-start justify-between gap-4" style={{ marginBottom: 8 }}>
@@ -319,9 +341,9 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleAddon(label)}
-                          style={{ accentColor: T.primary, width: 16, height: 16 }}
+                          style={{ accentColor: T.primary, width: 16, height: 16, flexShrink: 0 }}
                         />
-                        <span style={{ fontSize: 13, color: T.dark, flex: 1 }}>{label}</span>
+                        <span style={{ fontSize: 13, color: T.dark, flex: 1, marginLeft: 4 }}>{label}</span>
                         {typeof addon === 'object' && addon.price != null && (
                           <span style={{ fontSize: 12, color: T.muted }}>+${Number(addon.price).toFixed(2)}</span>
                         )}
@@ -374,6 +396,8 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
       </div>
     </>
   );
+
+  return createPortal(content, document.body);
 };
 
 export default FoodModal;

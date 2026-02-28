@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <rect width="400" height="400" fill="#F3F4F6"/>
+  <!-- Plate shadow -->
+  <ellipse cx="200" cy="310" rx="90" ry="14" fill="#E5E7EB"/>
+  <!-- Bun bottom -->
+  <ellipse cx="200" cy="265" rx="82" ry="22" fill="#D97706"/>
+  <!-- Patty -->
+  <rect x="124" y="225" width="152" height="32" rx="6" fill="#78350F"/>
+  <!-- Lettuce -->
+  <path d="M120 224 Q140 210 160 222 Q180 210 200 222 Q220 210 240 222 Q260 210 280 224 L280 228 Q260 218 240 228 Q220 218 200 228 Q180 218 160 228 Q140 218 120 228 Z" fill="#16A34A"/>
+  <!-- Cheese -->
+  <rect x="118" y="218" width="164" height="12" rx="3" fill="#FBBF24" opacity="0.9"/>
+  <!-- Tomato -->
+  <ellipse cx="200" cy="213" rx="68" ry="8" fill="#DC2626" opacity="0.85"/>
+  <!-- Bun top -->
+  <ellipse cx="200" cy="196" rx="82" ry="52" fill="#D97706"/>
+  <!-- Sesame seeds -->
+  <ellipse cx="175" cy="162" rx="8" ry="4" fill="#92400E" transform="rotate(-20,175,162)"/>
+  <ellipse cx="205" cy="155" rx="8" ry="4" fill="#92400E" transform="rotate(10,205,155)"/>
+  <ellipse cx="232" cy="164" rx="8" ry="4" fill="#92400E" transform="rotate(-10,232,164)"/>
+  <ellipse cx="190" cy="172" rx="6" ry="3" fill="#92400E" transform="rotate(15,190,172)"/>
+  <ellipse cx="218" cy="174" rx="6" ry="3" fill="#92400E" transform="rotate(-5,218,174)"/>
+  <!-- Label -->
+  <text x="200" y="365" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" fill="#9CA3AF" font-weight="500">No image available</text>
+</svg>

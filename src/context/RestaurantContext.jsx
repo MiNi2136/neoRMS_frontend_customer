@@ -23,13 +23,39 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 
 export const RestaurantContext = createContext(null);
 
+/* ── Storage helpers ── */
+const STORAGE_KEY = 'neoRMS_currentRestaurant';
+
+const loadFromStorage = () => {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveToStorage = (restaurant) => {
+  try {
+    if (restaurant) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(restaurant));
+    else            sessionStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore quota errors */ }
+};
+
 export const RestaurantProvider = ({ children }) => {
-  const [currentRestaurant, setCurrentRestaurant] = useState(null);
+  const [currentRestaurant, _setCurrentRestaurant] = useState(() => loadFromStorage());
   const [allRestaurants,    setAllRestaurants    ] = useState([]);
+
+  /** Set restaurant and persist to sessionStorage so refresh preserves it. */
+  const setCurrentRestaurant = useCallback((restaurant) => {
+    _setCurrentRestaurant(restaurant);
+    saveToStorage(restaurant);
+  }, []);
 
   /** Clear the active restaurant (e.g. when navigating back to the explorer). */
   const clearCurrentRestaurant = useCallback(() => {
-    setCurrentRestaurant(null);
+    _setCurrentRestaurant(null);
+    saveToStorage(null);
   }, []);
 
   const value = {

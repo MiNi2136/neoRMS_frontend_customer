@@ -58,12 +58,14 @@ const normalise = (raw) => {
     : Number(raw.price ?? 0);
 
   // ── Availability ──────────────────────────────────────────────────
-  // status values the backend may send: 'active' | 'inactive' | 'available' | 'unavailable'
+  // Backend may send status in ANY case: 'AVAILABLE', 'available', 'active', etc.
+  // Normalise to lowercase before comparing so case never causes false negatives.
+  const statusLower = (raw.status ?? '').toLowerCase();
   const activeStatuses   = ['active', 'available'];
   const inactiveStatuses = ['inactive', 'unavailable'];
-  const isAvailable = raw.status
-    ? activeStatuses.includes(raw.status)
-    : raw.isAvailable !== false && !inactiveStatuses.includes(raw.status);
+  const isAvailable = statusLower
+    ? activeStatuses.includes(statusLower)
+    : raw.isAvailable !== false && !inactiveStatuses.includes(statusLower);
 
   // ── Category ──────────────────────────────────────────────────────
   const category =
@@ -162,13 +164,12 @@ const CategorySection = ({ category, onSelectItem }) => {
       ref={ref}
       id={category.id}
       className="scroll-mt-28"
-      style={{ marginTop: 96, marginBottom: 112 }}
+      style={{ marginTop: 20, marginBottom: 44 }}
     >
-      <div className={inView ? 'rm-fade-in' : 'opacity-0'} style={{ marginBottom: 0 }}>
-        <h2 style={{ fontSize: '1.875rem', fontWeight: 700, color: T.primary, marginBottom: 12 }}>
+      <div className={inView ? 'rm-fade-in' : 'opacity-0'}>
+        <h2 style={{ fontSize: '1.875rem', fontWeight: 700, color: T.primary, marginBottom: 18 }}>
           {category.title}
         </h2>
-        <div style={{ height: 1, backgroundColor: T.border, marginBottom: 48 }} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-8">
@@ -338,7 +339,7 @@ const RestaurantMenuPage = () => {
           maxWidth: 1100, width: '100%',
           marginLeft: 'auto', marginRight: 'auto',
           paddingLeft: 24, paddingRight: 24,
-          paddingTop: 48, paddingBottom: 96,
+          paddingTop: 57, paddingBottom: 64,
         }}>
           {categories.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 0', color: T.muted }}>

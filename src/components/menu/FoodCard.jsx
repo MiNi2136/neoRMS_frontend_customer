@@ -1,5 +1,7 @@
-﻿import React from 'react';
-import { ShoppingCart, ImageOff } from 'lucide-react';
+﻿import React, { useState } from 'react';
+import { ShoppingCart } from 'lucide-react';
+
+const PLACEHOLDER = 'https://res.cloudinary.com/dltp00ewe/image/upload/v1772005066/alex-munsell-Yr4n8O_3UPc-unsplash_peadau.jpg';
 
 const T = {
   primary: '#2DBE60',
@@ -9,7 +11,7 @@ const T = {
 };
 
 const FoodCard = ({ item, onClick }) => {
-  /* Support both direct price and variants array */
+  /* ── Price display ─────────────────────────────────────────────── */
   const displayPrice = (() => {
     if (Array.isArray(item.variants) && item.variants.length > 0) {
       const prices = item.variants.map((v) => Number(v.price ?? 0));
@@ -20,10 +22,14 @@ const FoodCard = ({ item, onClick }) => {
     return `$${Number(item.price ?? 0).toFixed(2)}`;
   })();
 
-  /* Support images array or single image */
-  const thumbnail = (Array.isArray(item.images) && item.images[0])
-    ? item.images[0]
-    : item.image ?? '';
+  /* ── Image source with useState fallback ───────────────────────
+     Priority: images[0]  →  item.image  →  PLACEHOLDER
+     Using useState lets React re-render cleanly when onError fires,
+     avoiding any direct DOM manipulation. 
+  ─────────────────────────────────────────────────────────────── */
+  const initialSrc = item.images?.[0] || item.image || PLACEHOLDER;
+
+  const [imgSrc, setImgSrc] = useState(initialSrc);
 
   return (
   <article
@@ -42,34 +48,22 @@ const FoodCard = ({ item, onClick }) => {
       opacity: item.isAvailable === false ? 0.6 : 1,
     }}
   >
-    {/* Image */}
+    {/* ── Image ── */}
     <div
       className="relative overflow-hidden"
       style={{ aspectRatio: '1/1', borderRadius: 10, marginBottom: 12, background: '#F3F4F6' }}
     >
-      {thumbnail ? (
-        <img
-          src={thumbnail}
-          alt={item.name}
-          loading="lazy"
-          crossOrigin="anonymous"
-          className="popular-card-img w-full h-full object-cover block"
-          style={{ transition: 'transform 0.4s ease-in-out' }}
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-            e.currentTarget.nextSibling && (e.currentTarget.nextSibling.style.display = 'flex');
-          }}
-        />
-      ) : null}
-      <div
-        style={{
-          width: '100%', height: '100%',
-          display: thumbnail ? 'none' : 'flex',
-          alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        <ImageOff size={32} color="#D1D5DB" />
-      </div>
+      {/* Single <img> always rendered — onError swaps src to placeholder */}
+      <img
+        src={imgSrc}
+        alt={item.name ?? 'Menu item'}
+        loading="lazy"
+        className="popular-card-img w-full h-full object-cover block"
+        style={{ transition: 'transform 0.4s ease-in-out' }}
+        onError={() => setImgSrc(PLACEHOLDER)}
+      />
+
+      {/* Badge */}
       {item.badge && (
         <span
           className="absolute top-2 left-2"
@@ -84,6 +78,8 @@ const FoodCard = ({ item, onClick }) => {
           {item.badge}
         </span>
       )}
+
+      {/* Unavailable overlay — driven by status, NOT image load result */}
       {item.isAvailable === false && (
         <div style={{
           position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.55)',
@@ -94,7 +90,7 @@ const FoodCard = ({ item, onClick }) => {
       )}
     </div>
 
-    {/* Content */}
+    {/* ── Content ── */}
     <div style={{ padding: '0 4px 4px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
       <h3
         style={{
@@ -135,3 +131,4 @@ const FoodCard = ({ item, onClick }) => {
 };
 
 export default FoodCard;
+

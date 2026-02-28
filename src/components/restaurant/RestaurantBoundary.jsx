@@ -130,8 +130,11 @@ const RestaurantBoundary = () => {
 
     return () => {
       cancelled = true;
-      // Clear restaurant when leaving this sub-tree
-      setCurrentRestaurant(null);
+      // Do NOT clear currentRestaurant here — doing so would wipe context
+      // on every sub-route navigation (menu → cart → menu), causing
+      // "No restaurant selected" errors mid-session.
+      // Restaurant is cleared explicitly only by clearCurrentRestaurant()
+      // (e.g. when the user navigates back to the restaurants list).
     };
   }, [restaurantId, setCurrentRestaurant]);
 

@@ -69,8 +69,13 @@ const Header = () => {
   const logoTo   = restaurantId ? `/restaurant/${restaurantId}` : '/';
   const logoText = currentRestaurant?.name ? currentRestaurant.name : 'GreenBite';
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-  const isActive  = (to) =>
-    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
+  /* Active nav label — first link whose `to` exactly matches the current path.
+     Using label identity (not `to`) ensures only ONE item is ever active,
+     even when two links share the same `to` URL (e.g. Daily Menu / Order Food Online). */
+  const activeNavLabel = navLinks.find(link => link.to === location.pathname)?.label ?? null;
+  const isNavActive  = (label) => label === activeNavLabel;
+  /* One-off exact check used for non-nav links (notifications, orders, etc.) */
+  const pathActive   = (path)  => location.pathname === path;
 
   /* Navigate to cart if authenticated, else open sign-in modal.
      When inside a restaurant we use the restaurant-scoped /cart route
@@ -106,8 +111,8 @@ const Header = () => {
 
   /* ── Dynamic colour set based on scroll + page ── */
   const onHero    = (isHome || isRestaurantHome) && !scrolled;
-  const linkColor = (to) => {
-    if (isActive(to)) return C.primary;
+  const linkColor = (label) => {
+    if (isNavActive(label)) return C.primary;
     return onHero ? 'rgba(255,255,255,0.92)' : C.dark;
   };
   const iconColor  = onHero ? '#FFFFFF' : C.dark;
@@ -239,9 +244,9 @@ const Header = () => {
                 key={label}
                 to={to}
                 onClick={onClick}
-                className={`nb-link${isActive(to) ? ' nb-active' : ''}`}
+                className={`nb-link${isNavActive(label) ? ' nb-active' : ''}`}
                 style={{
-                  color: linkColor(to),
+                  color: linkColor(label),
                   fontSize: 15, fontWeight: 500, letterSpacing: '0.3px', whiteSpace: 'nowrap',
                   transition: 'color 0.3s ease',
                 }}
@@ -418,8 +423,8 @@ const Header = () => {
                   to={to}
                   className="nb-mobile-link"
                   style={{
-                    color: isActive(to) ? C.primary : C.dark,
-                    backgroundColor: isActive(to) ? 'rgba(45,190,96,0.08)' : 'transparent',
+                    color: isNavActive(label) ? C.primary : C.dark,
+                    backgroundColor: isNavActive(label) ? 'rgba(45,190,96,0.08)' : 'transparent',
                   }}
                   onClick={() => { onClick?.(); setMobileOpen(false); }}
                 >
@@ -429,7 +434,7 @@ const Header = () => {
               <Link
                 to="/notifications"
                 className="nb-mobile-link flex items-center gap-2"
-                style={{ color: isActive('/notifications') ? C.primary : C.dark }}
+                style={{ color: pathActive('/notifications') ? C.primary : C.dark }}
                 onClick={() => setMobileOpen(false)}
               >
                 <Bell size={16} /> Notifications
@@ -441,7 +446,7 @@ const Header = () => {
                   <Link
                     to="/orders"
                     className="nb-mobile-link flex items-center gap-2"
-                    style={{ color: isActive('/orders') ? C.primary : C.dark }}
+                    style={{ color: pathActive('/orders') ? C.primary : C.dark }}
                     onClick={() => setMobileOpen(false)}
                   >
                     <ShoppingCart size={16} /> My Orders
