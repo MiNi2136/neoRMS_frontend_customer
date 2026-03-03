@@ -36,7 +36,9 @@ const SignInPage = () => {
   const [error,     setError    ] = useState('');
 
   /* Show a green banner when the user just registered */
-  const justRegistered = location.state?.registered === true;
+  const justRegistered  = location.state?.registered     === true;
+  /* Show an amber banner when the session expired mid-use */
+  const sessionExpired  = location.state?.sessionExpired === true;
 
   const handleChange = (e) => {
     setError('');
@@ -156,6 +158,24 @@ const SignInPage = () => {
             Sign in to continue to your account
           </p>
         </div>
+
+        {/* Session-expired banner */}
+        {sessionExpired && !error && (
+          <div
+            role="alert"
+            style={{
+              background:   '#FFFBEB',
+              border:       '1px solid #FCD34D',
+              borderRadius: '8px',
+              padding:      '10px 14px',
+              marginBottom: '18px',
+              fontSize:     '14px',
+              color:        '#92400E',
+            }}
+          >
+            Session expired. Please sign in again.
+          </div>
+        )}
 
         {/* Registration success banner */}
         {justRegistered && !error && (

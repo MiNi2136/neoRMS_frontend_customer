@@ -7,13 +7,25 @@
 // Every backend route is mounted under /api (e.g. /api/restaurant, /api/user/me).
 // In production set VITE_API_BASE_URL to your deployed API root including the /api segment
 // (e.g. https://api.example.com/api).
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-const TOKEN_KEY = 'auth_token';
+const BASE_URL    = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const TOKEN_KEY     = 'accessToken'; // matches backend field name
+const USER_ID_KEY   = 'userId';      // user's own profile id
+const TENANT_ID_KEY = 'tenantId';    // sent as x-tenant-id header
 
 /* ── Token helpers ──────────────────────────────────────────────── */
 export const getToken   = ()        => localStorage.getItem(TOKEN_KEY);
 export const setToken   = (token)   => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = ()        => localStorage.removeItem(TOKEN_KEY);
+
+/* ── User-ID helpers (user's own profile id) ────────────────────── */
+export const getUserId   = ()     => localStorage.getItem(USER_ID_KEY);
+export const setUserId   = (id)   => localStorage.setItem(USER_ID_KEY, String(id));
+export const clearUserId = ()     => localStorage.removeItem(USER_ID_KEY);
+
+/* ── Tenant-ID helpers (sent as x-tenant-id header) ────────────── */
+export const getTenantId   = ()     => localStorage.getItem(TENANT_ID_KEY);
+export const setTenantId   = (id)   => localStorage.setItem(TENANT_ID_KEY, String(id));
+export const clearTenantId = ()     => localStorage.removeItem(TENANT_ID_KEY);
 
 /* ── ApiError — carries status + backend message ────────────────── */
 export class ApiError extends Error {
@@ -31,11 +43,13 @@ export class ApiError extends Error {
  * On non-2xx: parses error body and throws ApiError(status, message).
  */
 export const apiFetch = async (path, options = {}) => {
-  const token = getToken();
+  const token    = getToken();
+  const tenantId = getTenantId();
 
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token    ? { Authorization: `Bearer ${token}` } : {}),
+    ...(tenantId ? { 'x-tenant-id': tenantId }          : {}),
     ...(options.headers || {}),
   };
 

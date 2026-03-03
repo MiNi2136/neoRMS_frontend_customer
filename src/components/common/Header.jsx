@@ -402,7 +402,7 @@ const Header = () => {
                 {userMenuOpen && (
                   <div className="nb-user-menu">
                     <Link
-                      to="/orders"
+                      to="/order"
                       className="nb-user-item"
                       onClick={() => setUserMenuOpen(false)}
                     >
@@ -509,9 +509,9 @@ const Header = () => {
               {status === AUTH_STATUS.AUTHENTICATED ? (
                 <>
                   <Link
-                    to="/orders"
+                    to="/order"
                     className="nb-mobile-link flex items-center gap-2"
-                    style={{ color: pathActive('/orders') ? C.primary : C.dark }}
+                    style={{ color: pathActive('/order') ? C.primary : C.dark }}
                     onClick={() => setMobileOpen(false)}
                   >
                     <ShoppingCart size={16} /> My Orders

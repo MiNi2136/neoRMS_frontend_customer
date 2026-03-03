@@ -112,10 +112,11 @@ export const CartProvider = ({ children }) => {
   }, [requireAuth]);
 
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-  const cartTotal = cart.reduce(
-    (sum, item) => sum + item.price * (item.quantity ?? 1),
-    0,
-  );
+  // cartTotal = sum of (base price + all selected addon prices) × quantity per item
+  const cartTotal = cart.reduce((sum, item) => {
+    const addonSum = (item.addons ?? []).reduce((s, a) => s + Number(a.price ?? 0), 0);
+    return sum + (item.price + addonSum) * (item.quantity ?? 1);
+  }, 0);
 
   const value = {
     cart,

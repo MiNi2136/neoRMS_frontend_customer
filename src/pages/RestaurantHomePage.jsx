@@ -75,7 +75,7 @@ const RestaurantHomePage = () => {
     { to: `/restaurant/${restaurantId}/menu`,  icon: <UtensilsCrossed size={28} />, label: 'View Menu',     desc: 'Browse all dishes' },
     { to: `/restaurant/${restaurantId}/about`, icon: <BookOpen size={28} />,        label: 'About Us',      desc: 'Our story & info' },
     { to: '/reservations',                     icon: <CalendarDays size={28} />,    label: 'Book A Table',  desc: 'Reserve your seat' },
-    { to: '/orders',                           icon: <ClipboardList size={28} />,   label: 'Order History', desc: 'View past orders' },
+    { to: '/order',                            icon: <ClipboardList size={28} />,   label: 'Order History', desc: 'View past orders' },
   ];
 
   return (

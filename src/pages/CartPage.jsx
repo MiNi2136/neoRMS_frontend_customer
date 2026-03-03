@@ -7,11 +7,12 @@
    Colors/shadows/radii match the existing site theme.
    ───────────────────────────────────────────────────────────────── */
 
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Trash2, Plus, Minus, Tag, ArrowRight, ShoppingBag } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Loader2, CheckCircle2 } from 'lucide-react';
 import { CartContext } from '../context/CartContext';
 import { useRestaurant } from '../context/RestaurantContext';
+import { validateCoupon } from '../services/orderService';
 
 /* ── Theme ── */
 const C = {
@@ -38,23 +39,92 @@ const CartPage = () => {
   const restaurantId = currentRestaurant?.id ?? currentRestaurant?._id ?? null;
   const menuLink = restaurantId ? `/restaurant/${restaurantId}/menu` : '/menu';
 
-  const [coupon,    setCoupon   ] = useState('');
-  const [couponOk,  setCouponOk ] = useState(false);
-  const [couponErr, setCouponErr] = useState(false);
+  // ── Coupon state ──────────────────────────────────────────────
+  const [couponInput,          setCouponInput         ] = useState('');
+  const [isValidating,         setIsValidating        ] = useState(false);
+  const [couponError,          setCouponError         ] = useState('');
+  const [isCouponApplied,      setIsCouponApplied     ] = useState(false);
+  const [couponCode,           setCouponCode          ] = useState('');
+  /**
+   * couponData — raw benefit object returned by backend:
+   *   { originalAmount: number, discountAmount: number, finalAmount: number }
+   *   All values are integer cents.
+   */
+  const [couponData,           setCouponData          ] = useState(null);
+  const [cartChangedMsg,       setCartChangedMsg      ] = useState('');
 
-  const subtotal = cartTotal;
-  const tax      = subtotal * TAX_RATE;
-  const discount = couponOk ? subtotal * 0.10 : 0;
-  const total    = subtotal + tax + SERVICE_FEE - discount;
-  const isEmpty  = cart.length === 0;
+  // ── Derived totals (all in cents, display converts /100) ──────
+  const subtotal           = cartTotal;                                       // dollars (float)
+  const tax                = subtotal * TAX_RATE;                            // dollars (float)
+  // originalTotalCents: Math.ceil so fractions never short-change
+  const originalTotalCents = Math.ceil((subtotal + tax + SERVICE_FEE) * 100); // integer cents
+  // Trust backend finalAmount when coupon is applied; otherwise use original
+  const discountAmountCents = couponData?.discountAmount ?? 0;
+  const finalTotalCents     = couponData?.finalAmount    ?? originalTotalCents; // integer cents
+  const isEmpty             = cart.length === 0;
 
-  const applyCoupon = () => {
-    if (coupon.trim().toUpperCase() === 'NEORMS10') {
-      setCouponOk(true);
-      setCouponErr(false);
-    } else {
-      setCouponOk(false);
-      setCouponErr(true);
+  // ── Reset coupon whenever cart contents change ─────────────────
+  const prevCartLengthRef = useRef(cart.length);
+  useEffect(() => {
+    if (cart.length !== prevCartLengthRef.current) {
+      prevCartLengthRef.current = cart.length;
+      if (isCouponApplied) {
+        // Coupon was active — must reset because orderAmount changed
+        setCouponInput('');
+        setCouponError('');
+        setIsCouponApplied(false);
+        setCouponCode('');
+        setCouponData(null);
+        setCartChangedMsg('Cart updated. Please reapply your coupon.');
+        const t = setTimeout(() => setCartChangedMsg(''), 5000);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [cart, isCouponApplied]);
+
+  // Helper: reset all coupon state
+  const removeCoupon = () => {
+    setIsCouponApplied(false);
+    setCouponCode('');
+    setCouponData(null);
+    setCouponInput('');
+    setCouponError('');
+    setCartChangedMsg('');
+  };
+
+  // ── Apply coupon via API ───────────────────────────────────────
+  const applyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+    setCouponError('');
+    setIsValidating(true);
+    try {
+      const res = await validateCoupon({
+        code,
+        orderAmount: originalTotalCents,
+        restaurantId: restaurantId ?? '',
+      });
+
+      // Backend must return benefit.originalAmount / benefit.discountAmount / benefit.finalAmount
+      // (all integer cents). Fall back to top-level fields for looser backends.
+      const benefit = res?.benefit ?? res;
+      const origAmt  = Number(benefit?.originalAmount ?? originalTotalCents);
+      const discAmt  = Number(benefit?.discountAmount  ?? 0);
+      const finalAmt = Number(benefit?.finalAmount     ?? (origAmt - discAmt));
+
+      setCouponData({ originalAmount: origAmt, discountAmount: discAmt, finalAmount: finalAmt });
+      setCouponCode(code);
+      setIsCouponApplied(true);
+      setCouponError('');
+      setCartChangedMsg('');
+    } catch (err) {
+      removeCoupon();
+      setCouponError(err?.message || 'Invalid or expired coupon.');
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -109,6 +179,14 @@ const CartPage = () => {
           transition: background-color 0.2s;
         }
         .cp-apply-btn:hover { background: ${C.primaryHover}; }
+        .cp-apply-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        @keyframes cp-spin { to { transform: rotate(360deg); } }
+        @keyframes cp-total-pop {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.08); }
+          100% { transform: scale(1); }
+        }
+        .cp-total-animate { animation: cp-total-pop 0.35s ease; }
         @media (max-width: 740px) {
           .cart-grid { grid-template-columns: 1fr !important; }
         }
@@ -219,47 +297,152 @@ const CartPage = () => {
                 Order Summary
               </h2>
 
-              <SummaryRow label="Subtotal"                         value={subtotal} />
-              <SummaryRow label={`Tax (${Math.round(TAX_RATE*100)}%)`} value={tax} />
-              <SummaryRow label="Service fee"                       value={SERVICE_FEE} />
-              {couponOk && <SummaryRow label="Coupon (10 % off)" value={-discount} highlight />}
+              {/* ── Charge rows ── */}
+              <SummaryRow label="Subtotal"                              value={subtotal} />
+              <SummaryRow label={`Tax (${Math.round(TAX_RATE*100)}%)`}  value={tax} />
+              <SummaryRow label="Service fee"                           value={SERVICE_FEE} />
 
-              <div style={{ height: 1, background: C.border, margin: '14px 0' }} />
+              <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
 
-              <div style={{
-                display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', marginBottom: 20,
-              }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>Total</span>
-                <span style={{ fontSize: 20, fontWeight: 800, color: C.primary }}>
-                  ${total.toFixed(2)}
-                </span>
+              {/* ── Order Total (always visible) ── */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isCouponApplied && discountAmountCents > 0 ? 10 : 20 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>Order Total</span>
+                {isCouponApplied && discountAmountCents > 0 ? (
+                  <span style={{ fontSize: 14, fontWeight: 600, color: C.muted, textDecoration: 'line-through' }}>
+                    ${(originalTotalCents / 100).toFixed(2)}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 20, fontWeight: 800, color: C.primary }}>
+                    ${(finalTotalCents / 100).toFixed(2)}
+                  </span>
+                )}
               </div>
 
-              {/* Coupon */}
+              {/* ── Discount + Payable (only when coupon applied) ── */}
+              {isCouponApplied && discountAmountCents > 0 && (
+                <>
+                  {/* Discount row */}
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: '#F0FDF4', borderRadius: 8, padding: '8px 11px', marginBottom: 10,
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#15803D', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span>🏷️</span> Discount ({couponCode})
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>
+                      −${(discountAmountCents / 100).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Second divider */}
+                  <div style={{ height: 1, background: C.border, margin: '4px 0 12px' }} />
+
+                  {/* Amount Payable — prominent */}
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'rgba(230,57,70,0.05)', borderRadius: 10,
+                    padding: '10px 12px', marginBottom: 10,
+                  }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>Amount Payable</span>
+                    <span
+                      key={finalTotalCents}
+                      className="cp-total-animate"
+                      style={{ fontSize: 22, fontWeight: 800, color: C.primary }}
+                    >
+                      ${(finalTotalCents / 100).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Savings badge */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    background: '#DCFCE7', borderRadius: 9, padding: '8px 12px', marginBottom: 16,
+                  }}>
+                    <CheckCircle2 size={14} color="#16A34A" />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#15803D' }}>
+                      🎉 You saved ${(discountAmountCents / 100).toFixed(2)} with {couponCode}!
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {/* ── Coupon section ── */}
               <div style={{ marginBottom: 18 }}>
-                <p style={{ fontSize: 12, fontWeight: 500, color: C.muted, marginBottom: 7 }}>
-                  Have a coupon?
-                </p>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    className="cp-coupon-input"
-                    placeholder="e.g. NEORMS10"
-                    value={coupon}
-                    onChange={(e) => { setCoupon(e.target.value); setCouponOk(false); setCouponErr(false); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') applyCoupon(); }}
-                  />
-                  <button className="cp-apply-btn" onClick={applyCoupon}>Apply</button>
-                </div>
-                {couponOk && (
-                  <p style={{ fontSize: 12, color: C.primary, marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Tag size={12} /> 10 % discount applied!
-                  </p>
+                {/* Cart-changed warning */}
+                {cartChangedMsg && (
+                  <div style={{
+                    background: '#FEF9C3', border: '1px solid #FDE047',
+                    borderRadius: 8, padding: '7px 11px', marginBottom: 10,
+                    fontSize: 12, color: '#854D0E', display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <span style={{ fontSize: 14 }}>⚠️</span> {cartChangedMsg}
+                  </div>
                 )}
-                {couponErr && (
-                  <p style={{ fontSize: 12, color: '#EF4444', marginTop: 5 }}>
-                    Invalid coupon code.
-                  </p>
+
+                {isCouponApplied ? (
+                  /* Applied coupon badge */
+                  <div style={{
+                    border: `1.5px solid #86EFAC`,
+                    borderRadius: 10, padding: '10px 13px',
+                    background: '#F0FDF4',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <CheckCircle2 size={16} color="#16A34A" />
+                      <div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#15803D', letterSpacing: '0.3px' }}>
+                          {couponCode} applied
+                        </p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#16A34A' }}>
+                          Saving ${(discountAmountCents / 100).toFixed(2)} on this order
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={removeCoupon}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 12, fontWeight: 600, color: '#DC2626',
+                        padding: '4px 8px', borderRadius: 6,
+                        transition: 'background-color 0.15s',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#FEE2E2'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  /* Input row */
+                  <>
+                    <p style={{ fontSize: 12, fontWeight: 500, color: C.muted, marginBottom: 7 }}>
+                      Have a coupon?
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="cp-coupon-input"
+                        placeholder="Enter coupon code"
+                        value={couponInput}
+                        onChange={(e) => { setCouponInput(e.target.value); setCouponError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') applyCoupon(); }}
+                      />
+                      <button
+                        className="cp-apply-btn"
+                        onClick={applyCoupon}
+                        disabled={isValidating}
+                        style={isValidating ? { opacity: 0.7, cursor: 'not-allowed', minWidth: 64 } : { minWidth: 64 }}
+                      >
+                        {isValidating
+                          ? <Loader2 size={14} style={{ animation: 'cp-spin 0.7s linear infinite' }} />
+                          : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p style={{ fontSize: 12, color: '#EF4444', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 14 }}>⚠</span> {couponError}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -267,9 +450,17 @@ const CartPage = () => {
               <button
                 className="cp-checkout-btn"
                 disabled={isEmpty}
-                onClick={() => navigate('/order-review')}
+                onClick={() =>
+                  navigate('/order-review', {
+                    state: {
+                      finalTotalCents,
+                      discountAmountCents,
+                      couponCode: isCouponApplied ? couponCode : undefined,
+                    },
+                  })
+                }
               >
-                Proceed to Checkout <ArrowRight size={16} />
+                Proceed to Checkout · ${(finalTotalCents / 100).toFixed(2)} <ArrowRight size={16} />
               </button>
 
               {/* Continue shopping */}
@@ -325,7 +516,6 @@ const CartItemCard = ({ item, onRemove, onQty }) => (
       )}
     </div>
 
-    {/* Info */}
     <div style={{ flex: 1, minWidth: 0 }}>
       <p style={{
         fontSize: 14, fontWeight: 700, color: '#1F2937', margin: '0 0 2px',
@@ -334,12 +524,30 @@ const CartItemCard = ({ item, onRemove, onQty }) => (
         {item.name}
       </p>
       {item.category && (
-        <p style={{ fontSize: 12, color: '#6B7280', margin: '0 0 8px' }}>
+        <p style={{ fontSize: 12, color: '#6B7280', margin: '0 0 4px' }}>
           {item.category}
         </p>
       )}
+      {/* Addon chips */}
+      {item.addons && item.addons.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+          {item.addons.map((a) => (
+            <span
+              key={a.addonId ?? a.name}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                background: 'rgba(230,57,70,0.09)', color: '#E63946',
+                padding: '1px 7px', borderRadius: 8,
+              }}
+            >
+              +{a.name}{a.price > 0 ? ` $${Number(a.price).toFixed(2)}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Addon-inclusive total price */}
       <p style={{ fontSize: 14, fontWeight: 700, color: '#E63946', margin: 0 }}>
-        ${(item.price * (item.quantity ?? 1)).toFixed(2)}
+        ${((item.price + (item.addons ?? []).reduce((s, a) => s + Number(a.price ?? 0), 0)) * (item.quantity ?? 1)).toFixed(2)}
       </p>
     </div>
 
@@ -374,14 +582,14 @@ const CartItemCard = ({ item, onRemove, onQty }) => (
 );
 
 /* ── Summary Row ─────────────────────────────────────────────────── */
-const SummaryRow = ({ label, value, highlight }) => (
+const SummaryRow = ({ label, value }) => (
   <div style={{
     display: 'flex', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 10,
   }}>
     <span style={{ fontSize: 14, color: '#6B7280' }}>{label}</span>
-    <span style={{ fontSize: 14, fontWeight: 600, color: highlight ? '#E63946' : '#1F2937' }}>
-      {value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`}
+    <span style={{ fontSize: 14, fontWeight: 600, color: '#1F2937' }}>
+      ${Number(value).toFixed(2)}
     </span>
   </div>
 );

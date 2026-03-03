@@ -26,6 +26,10 @@ import {
   loginRequest,
   signupRequest,
   setToken,
+  setUserId,
+  clearUserId,
+  setTenantId,
+  clearTenantId,
 } from '../services/authService';
 
 /* ── Status constants (use these instead of raw strings) ─────────── */
@@ -81,10 +85,21 @@ export const AuthProvider = ({ children }) => {
       try {
         const profile = await fetchProfile();
         setUser(profile);
+        setUserId(profile?.id ?? profile?._id ?? '');
+        // Priority: explicit tenantId > nested tenant.id > own user id (last resort)
+        const tid =
+          profile?.tenantId   ??
+          profile?.tenant?.id ??
+          profile?.id         ??
+          profile?._id        ?? '';
+        console.debug('[Auth] bootstrap tenantId:', tid);
+        setTenantId(tid);
         setStatus(AUTH_STATUS.AUTHENTICATED);
       } catch (err) {
         // 401 / network error → treat as unauthenticated
         clearToken();
+        clearUserId();
+        clearTenantId();
         setStatus(AUTH_STATUS.UNAUTHENTICATED);
       }
     };
@@ -113,7 +128,45 @@ export const AuthProvider = ({ children }) => {
     if (!token) throw new Error('No token received from server.');
     setToken(token);
 
+    // ── Extract tenantId ─────────────────────────────────────────
+    // Priority: explicit tenantId fields first, only fall back to user.id last.
+    // Original order accidentally stored user.id instead of tenantId.
+    const tenantIdFromResponse =
+      data.tenantId              ??   // top-level explicit field
+      data.user?.tenantId        ??   // user object explicit field
+      data.user?.tenant?.id      ??   // nested tenant object
+      data.data?.tenantId        ??   // wrapped in data envelope
+      data.data?.user?.tenantId  ??
+      data.data?.user?.tenant?.id ??
+      data.user?.id              ??   // fallback: user id (last resort)
+      data.data?.user?.id        ??
+      null;
+
+    console.debug('[Auth] login response tenantId resolved:', tenantIdFromResponse,
+      '| raw top-level tenantId:', data.tenantId,
+      '| user.tenantId:', data.user?.tenantId,
+      '| user.id:', data.user?.id);
+
+    // CRITICAL: store tenantId BEFORE fetchProfile so the /user/me request
+    // already has the x-tenant-id header attached by apiFetch.
+    if (tenantIdFromResponse) {
+      setTenantId(tenantIdFromResponse);
+    }
+
     const profile = await fetchProfile();
+
+    // Fallback to profile fields if login response didn't carry any id
+    const resolvedTenantId =
+      tenantIdFromResponse       ??
+      profile?.tenantId          ??   // explicit field
+      profile?.tenant?.id        ??   // nested object
+      profile?.id                ??   // last resort: own user id
+      profile?._id               ??
+      '';
+
+    console.debug('[Auth] resolved tenantId stored:', resolvedTenantId);
+    setUserId(profile?.id ?? profile?._id ?? '');
+    setTenantId(resolvedTenantId); // overwrite with most-resolved value
     setUser(profile);
     setStatus(AUTH_STATUS.AUTHENTICATED);
 
@@ -150,6 +203,8 @@ export const AuthProvider = ({ children }) => {
    */
   const logout = useCallback(() => {
     clearToken();
+    clearUserId();
+    clearTenantId();
     setUser(null);
     setStatus(AUTH_STATUS.UNAUTHENTICATED);
     // No navigation — intentional.
@@ -165,16 +220,22 @@ export const AuthProvider = ({ children }) => {
     (err) => {
       const errStatus = err?.status ?? err?.statusCode;
       if (errStatus === 401 || errStatus === 403) {
+        // Wipe everything from localStorage
         clearToken();
+        clearUserId();
+        clearTenantId();
         setUser(null);
         setStatus(AUTH_STATUS.UNAUTHENTICATED);
-        // Open modal so user can sign back in without leaving the page
-        openAuthModal('signin');
+        // Navigate to sign-in and surface a "session expired" banner
+        navigateRef.current('/sign-in', {
+          replace: true,
+          state:   { sessionExpired: true },
+        });
         return true;
       }
       return false;
     },
-    [openAuthModal],
+    [], // navigateRef is a stable ref — no dep needed
   );
 
   const value = {

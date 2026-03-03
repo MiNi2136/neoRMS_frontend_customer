@@ -1,21 +1,22 @@
 /* ─────────────────────────────────────────────────────────────────
    Restaurant Service — all restaurant-related API calls.
-   Uses the same apiFetch helper and BASE_URL as authService.
+   Uses apiClient (Axios instance) so auth + tenant headers are
+   auto-attached on every request.
    ───────────────────────────────────────────────────────────────── */
 
-import { apiFetch } from './authService';
+import apiClient from './apiClient';
 
 /**
  * Fetch all restaurants.
  * GET /restaurant
  */
-export const getAllRestaurants = () => apiFetch('/restaurant');
+export const getAllRestaurants = () => apiClient.get('/restaurant');
 
 /**
  * Fetch a single restaurant by its ID.
  * GET /restaurant/:id
  */
-export const getRestaurantById = (id) => apiFetch(`/restaurant/${id}`);
+export const getRestaurantById = (id) => apiClient.get(`/restaurant/${id}`);
 
 /**
  * Fetch menu products for a specific restaurant.
@@ -25,7 +26,7 @@ export const getRestaurantById = (id) => apiFetch(`/restaurant/${id}`);
  * items array directly so callers never need to deal with wrapper objects.
  */
 export const getRestaurantMenu = (restaurantId) =>
-  apiFetch(`/menuProduct/${restaurantId}`).then((res) => {
+  apiClient.get(`/menuProduct/${restaurantId}`).then((res) => {
     // Backend may return the array directly, or wrap it:
     // { success, data: [...] }  /  { items: [...] }  /  { menu: [...] }  etc.
     if (Array.isArray(res)) return res;

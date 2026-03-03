@@ -24,7 +24,7 @@ const Stars = ({ rating }) => (
 const PLACEHOLDER = 'https://res.cloudinary.com/dltp00ewe/image/upload/v1772005066/alex-munsell-Yr4n8O_3UPc-unsplash_peadau.jpg';
 
 const FoodModal = ({ item, onClose, restaurantId = null }) => {
-  // Safe images array — always an array of non-empty strings
+  // Safe images array ï¿½ always an array of non-empty strings
   const rawImages = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
   const images    = rawImages.length > 0 ? rawImages : (item.image ? [item.image] : [PLACEHOLDER]);
 
@@ -37,11 +37,16 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
   // imgSrc tracks the displayed URL for the current slide; resets on slide change
   const [imgSrc,          setImgSrc         ] = useState(images[0] ?? PLACEHOLDER);
   const [selectedVariant, setSelectedVariant] = useState(variants[0] ?? null);
+  // selectedAddons stores full addon objects {addonId, name, price} for price calc & order payload
   const [selectedAddons,  setSelectedAddons ] = useState([]);
 
   const computedPrice = selectedVariant
     ? Number(selectedVariant.price ?? 0)
     : item.price ?? 0;
+
+  // Effective unit price shown to user = base + selected addon prices
+  const addonExtraPrice = selectedAddons.reduce((s, a) => s + Number(a.price ?? 0), 0);
+  const displayPrice    = computedPrice + addonExtraPrice;
 
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -81,9 +86,13 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
     };
   }, []);
 
+  // Toggle a full addon object; compare by id/name so reference equality isn't needed
   const toggleAddon = (addon) => {
+    const key = addon.id ?? addon._id ?? addon.addonId ?? addon.name;
     setSelectedAddons((prev) =>
-      prev.includes(addon) ? prev.filter((a) => a !== addon) : [...prev, addon]
+      prev.some((a) => (a.id ?? a._id ?? a.addonId ?? a.name) === key)
+        ? prev.filter((a) => (a.id ?? a._id ?? a.addonId ?? a.name) !== key)
+        : [...prev, addon]
     );
   };
 
@@ -91,14 +100,22 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
     if (added) return;
     addToCart(
       {
-        id:       item.id ?? item._id,
-        name:     item.name,
-        price:    computedPrice,
-        image:    images[0] ?? '',
-        category: item.category ?? '',
-        // Read variant label in priority order matching the normalise mapping
-        variant:  selectedVariant?.size ?? selectedVariant?.name ?? selectedVariant?.type ?? null,
-        addons:   selectedAddons,
+        // Always expose menuItemId for the order payload
+        id:          item.id ?? item._id,
+        menuItemId:  item.id ?? item._id,
+        name:        item.name,
+        price:       computedPrice,          // base price only (addons tracked separately)
+        image:       images[0] ?? '',
+        category:    item.category ?? '',
+        // variantId must come from the backend variant object â€” sent in order payload
+        variantId:   selectedVariant?.id ?? selectedVariant?._id ?? null,
+        variant:     selectedVariant?.size ?? selectedVariant?.name ?? selectedVariant?.type ?? null,
+        // Normalise addons to { addonId, name, price } for order payload
+        addons: selectedAddons.map((a) => ({
+          addonId: a.id ?? a._id ?? a.addonId ?? a.name,
+          name:    a.name ?? String(a),
+          price:   Number(a.price ?? 0),
+        })),
       },
       restaurantId,
     );
@@ -143,7 +160,7 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
           padding: '40px 48px',          /* balanced margin on all 4 sides */
         }}
       >
-        {/* Modal card — two-column, fully contained in viewport */}
+        {/* Modal card ï¿½ two-column, fully contained in viewport */}
         <div
           onClick={(e) => e.stopPropagation()}
           className="bg-white rounded-2xl w-full"
@@ -164,7 +181,7 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
         >
           {/* -- LEFT: image column (close button lives here so it never overlaps price) -- */}
           <div style={{ width: 300, flexShrink: 0, position: 'relative', background: '#F3F4F6' }}>
-            {/* Close × — anchored to image column, clear of the price */}
+            {/* Close ï¿½ ï¿½ anchored to image column, clear of the price */}
             <button
               onClick={handleClose}
               className="fm-x-btn absolute flex items-center justify-center rounded-full"
@@ -256,13 +273,13 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
           {/* -- RIGHT: scrollable details column -- */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px 24px' }}>
 
-            {/* Title + computed price */}
+            {/* Title + computed price (base + selected addons) */}
             <div className="flex items-start justify-between gap-4" style={{ marginBottom: 8 }}>
               <h2 style={{ fontSize: 22, fontWeight: 700, color: T.dark, lineHeight: 1.35, margin: 0, flex: 1 }}>
                 {item.name}
               </h2>
               <span style={{ fontSize: 22, fontWeight: 800, color: T.primary, flexShrink: 0, marginTop: 2 }}>
-                ${computedPrice.toFixed(2)}
+                ${displayPrice.toFixed(2)}
               </span>
             </div>
 
@@ -333,19 +350,26 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
                 <p style={{ fontSize: 13, fontWeight: 600, color: T.dark, marginBottom: 8 }}>Add-ons</p>
                 <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 14px', background: '#FAFAFA' }}>
                   {addonOptions.map((addon) => {
-                    const label = typeof addon === 'string' ? addon : (addon.name ?? String(addon));
-                    const checked = selectedAddons.includes(label);
+                    // Normalise: addon can be a plain string or an object
+                    const addonObj = typeof addon === 'string'
+                      ? { name: addon, price: 0 }
+                      : addon;
+                    const label  = addonObj.name ?? String(addon);
+                    const addonKey = addonObj.id ?? addonObj._id ?? addonObj.addonId ?? label;
+                    const checked  = selectedAddons.some(
+                      (a) => (a.id ?? a._id ?? a.addonId ?? a.name) === addonKey
+                    );
                     return (
-                      <label key={label} className="fm-addon-row" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      <label key={addonKey} className="fm-addon-row" style={{ cursor: 'pointer', userSelect: 'none' }}>
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => toggleAddon(label)}
+                          onChange={() => toggleAddon(addonObj)}
                           style={{ accentColor: T.primary, width: 16, height: 16, flexShrink: 0 }}
                         />
                         <span style={{ fontSize: 13, color: T.dark, flex: 1, marginLeft: 4 }}>{label}</span>
-                        {typeof addon === 'object' && addon.price != null && (
-                          <span style={{ fontSize: 12, color: T.muted }}>+${Number(addon.price).toFixed(2)}</span>
+                        {addonObj.price != null && addonObj.price > 0 && (
+                          <span style={{ fontSize: 12, color: T.muted }}>+${Number(addonObj.price).toFixed(2)}</span>
                         )}
                       </label>
                     );

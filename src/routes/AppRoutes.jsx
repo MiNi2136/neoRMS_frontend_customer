@@ -18,7 +18,7 @@
    ├──────────────────────────────────────────────────────────┤
    │ Protected — login required                               │
    │   /cart | /order-review | /payment                      │
-   │   /order-tracking | /orders | /reorder                  │
+   │   /order-tracking | /order  | /reorder                  │
    │   /pre-order | /deposit-payment                         │
    │   /reservation-details | /notifications                 │
    └──────────────────────────────────────────────────────────┘
@@ -64,6 +64,7 @@ import ReservationDetailsPage from '../pages/ReservationDetailsPage';
 import OrderHistoryPage       from '../pages/OrderHistoryPage';
 import ReorderPage            from '../pages/ReorderPage';
 import NotificationsPage      from '../pages/NotificationsPage';
+import OrderConfirmationPage  from '../pages/OrderConfirmationPage';
 
 const AppRoutes = () => (
   <BrowserRouter>
@@ -126,10 +127,11 @@ const AppRoutes = () => (
                   {/* ── Protected routes — login required ── */}
                   <Route element={<ProtectedRoute />}>
                     {/* Cart & Checkout */}
-                    <Route path="/cart"            element={<CartPage />} />
-                    <Route path="/order-review"    element={<OrderReviewPage />} />
-                    <Route path="/payment"         element={<PaymentPage />} />
-                    <Route path="/order-tracking"  element={<OrderTrackingPage />} />
+                    <Route path="/cart"                 element={<CartPage />} />
+                    <Route path="/order-review"         element={<OrderReviewPage />} />
+                    <Route path="/order-confirmation"   element={<OrderConfirmationPage />} />
+                    <Route path="/payment"              element={<PaymentPage />} />
+                    <Route path="/order-tracking"       element={<OrderTrackingPage />} />
 
                     {/* Reservations (post-selection flow) */}
                     <Route path="/pre-order"           element={<PreOrderPage />} />
@@ -137,8 +139,8 @@ const AppRoutes = () => (
                     <Route path="/reservation-details" element={<ReservationDetailsPage />} />
 
                     {/* Orders */}
-                    <Route path="/orders"   element={<OrderHistoryPage />} />
-                    <Route path="/reorder"  element={<ReorderPage />} />
+                    <Route path="/order"  element={<OrderHistoryPage />} />
+                    <Route path="/reorder" element={<ReorderPage />} />
 
                     {/* Notifications */}
                     <Route path="/notifications" element={<NotificationsPage />} />
