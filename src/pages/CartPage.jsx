@@ -28,8 +28,7 @@ const C = {
   shadowStrong: '0 4px 24px rgba(31,41,55,0.10)',
 };
 
-const TAX_RATE    = 0.08;  // 8 %
-const SERVICE_FEE = 2;
+
 
 const CartPage = () => {
   const { cart, removeFromCart, updateQuantity, clearCart, cartTotal } = useContext(CartContext);
@@ -84,13 +83,10 @@ const CartPage = () => {
   }, [orderType, restaurantId]);
 
   // ── Derived totals (all in cents, display converts /100) ──────
-  const subtotal           = cartTotal;                                       // dollars (float)
-  const tax                = Math.round(subtotal * TAX_RATE);               // dollars (integer)
-  // originalTotalCents: Math.ceil so fractions never short-change
-  const originalTotalCents = Math.ceil((subtotal + tax + SERVICE_FEE) * 100); // integer cents
-  // Trust backend finalAmount when coupon is applied; otherwise use original
+  const subtotal            = cartTotal;                      // integer
+  const originalTotalCents  = subtotal;                         // no tax / service fee
   const discountAmountCents = couponData?.discountAmount ?? 0;
-  const finalTotalCents     = couponData?.finalAmount    ?? originalTotalCents; // integer cents
+  const finalTotalCents     = couponData?.finalAmount    ?? originalTotalCents;
   const isEmpty             = cart.length === 0;
 
   // ── Reset coupon whenever cart contents change ─────────────────
@@ -332,23 +328,16 @@ const CartPage = () => {
                 Order Summary
               </h2>
 
-              {/* ── Charge rows ── */}
-              <SummaryRow label="Subtotal"                              value={subtotal} />
-              <SummaryRow label={`Tax (${Math.round(TAX_RATE*100)}%)`}  value={tax} />
-              <SummaryRow label="Service fee"                           value={SERVICE_FEE} />
-
-              <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
-
               {/* ── Order Total (always visible) ── */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isCouponApplied && discountAmountCents > 0 ? 10 : 20 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>Order Total</span>
                 {isCouponApplied && discountAmountCents > 0 ? (
                   <span style={{ fontSize: 14, fontWeight: 600, color: C.muted, textDecoration: 'line-through' }}>
-                    ${(originalTotalCents / 100).toFixed(2)}
+                    ${Number(originalTotalCents).toFixed(2)}
                   </span>
                 ) : (
                   <span style={{ fontSize: 20, fontWeight: 800, color: C.primary }}>
-                    ${(finalTotalCents / 100).toFixed(2)}
+                    ${Number(finalTotalCents).toFixed(2)}
                   </span>
                 )}
               </div>
@@ -365,7 +354,7 @@ const CartPage = () => {
                       <span>🏷️</span> Discount ({couponCode})
                     </span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>
-                      −${(discountAmountCents / 100).toFixed(2)}
+                      −${Number(discountAmountCents).toFixed(2)}
                     </span>
                   </div>
 
@@ -384,7 +373,7 @@ const CartPage = () => {
                       className="cp-total-animate"
                       style={{ fontSize: 22, fontWeight: 800, color: C.primary }}
                     >
-                      ${(finalTotalCents / 100).toFixed(2)}
+                      ${Number(finalTotalCents).toFixed(2)}
                     </span>
                   </div>
 
@@ -395,7 +384,7 @@ const CartPage = () => {
                   }}>
                     <CheckCircle2 size={14} color="#16A34A" />
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#15803D' }}>
-                      🎉 You saved ${(discountAmountCents / 100).toFixed(2)} with {couponCode}!
+                      🎉 You saved ${Number(discountAmountCents).toFixed(2)} with {couponCode}!
                     </span>
                   </div>
                 </>
@@ -549,7 +538,7 @@ const CartPage = () => {
                           {couponCode} applied
                         </p>
                         <p style={{ margin: 0, fontSize: 11, color: '#16A34A' }}>
-                          Saving ${(discountAmountCents / 100).toFixed(2)} on this order
+                          Saving ${Number(discountAmountCents).toFixed(2)} on this order
                         </p>
                       </div>
                     </div>
@@ -688,28 +677,16 @@ const CartPage = () => {
 
           {/* Totals */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: C.muted }}>Subtotal</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.dark }}>${Number(subtotal).toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: C.muted }}>Tax ({Math.round(TAX_RATE * 100)}%)</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.dark }}>${Number(tax).toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: C.muted }}>Service fee</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.dark }}>${Number(SERVICE_FEE).toFixed(2)}</span>
-            </div>
             {isCouponApplied && discountAmountCents > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, color: '#15803D' }}>Discount ({couponCode})</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#15803D' }}>−${(discountAmountCents / 100).toFixed(2)}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#15803D' }}>−${Number(discountAmountCents).toFixed(2)}</span>
               </div>
             )}
             <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>Total</span>
-              <span style={{ fontSize: 18, fontWeight: 800, color: C.primary }}>${(finalTotalCents / 100).toFixed(2)}</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: C.primary }}>${Number(finalTotalCents).toFixed(2)}</span>
             </div>
           </div>
 
@@ -808,7 +785,7 @@ const CartPage = () => {
                     orderId,
                     orderType:     orderType === 'dine-in' ? 'DINE_IN' : 'TAKEAWAY',
                     paymentMethod: paymentMethod === 'cash' ? 'CASH' : 'ONLINE_PAYMENT',
-                    total:         finalTotalCents / 100,
+                    total:         finalTotalCents,
                   },
                 });
               } catch (err) {

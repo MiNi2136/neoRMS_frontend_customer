@@ -40,7 +40,7 @@ export const buildOrderItems = (cartItems) =>
       name:       item.name ?? item.title     ?? item.productName ?? '',
       quantity:   item.quantity ?? 1,
       // Backend expects integer cents: $8.46 → 846
-      price:      Math.round(Number(item.price ?? 0) * 100),
+      price:      item.price ?? 0,
       // variantId is required by the backend — never omit
       variantId:  item.variantId ?? '',
     };

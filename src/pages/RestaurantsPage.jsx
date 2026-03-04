@@ -312,7 +312,10 @@ const RestaurantsPage = () => {
     return true;
   });
 
-  const handleSelect   = (r) => navigate(`/restaurant/${r._id ?? r.id}`);
+  const handleSelect = (r) => {
+    if (r.tenantId) localStorage.setItem('tenantId', r.tenantId);
+    navigate(`/restaurant/${r._id ?? r.id}`);
+  };
   const toggleCategory = (id) => setActiveCategory((prev) => (prev === id ? null : id));
   const clearAll       = () => { setSearch(''); setActiveCategory(null); };
   const hasFilters     = !!(search || activeCategory);
