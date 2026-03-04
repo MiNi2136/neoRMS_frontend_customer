@@ -20,3 +20,13 @@ export const getTablesByRestaurant = (restaurantId) =>
       console.log('table', payload);
       return Array.isArray(payload) ? payload : [];
     });
+
+/**
+ * Reserve a table.
+ * POST /table/reserve/:tableId
+ *
+ * @param {string} tableId
+ * @param {{ scheduledFor: string, duration: number, partySize: number, notes?: string, contactPhone: string }} payload
+ */
+export const reserveTable = (tableId, payload) =>
+  apiClient.post(`/table/reserve/${tableId}`, payload);
