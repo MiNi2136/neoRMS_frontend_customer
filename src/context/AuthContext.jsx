@@ -93,13 +93,18 @@ export const AuthProvider = ({ children }) => {
           profile?.id         ??
           profile?._id        ?? '';
         console.debug('[Auth] bootstrap tenantId:', tid);
-        setTenantId(tid);
+        if (tid) setTenantId(tid); // only overwrite if non-empty
         setStatus(AUTH_STATUS.AUTHENTICATED);
       } catch (err) {
-        // 401 / network error → treat as unauthenticated
-        clearToken();
-        clearUserId();
-        clearTenantId();
+        // Only wipe tokens on an explicit 401 (token genuinely invalid/expired).
+        // Network errors, 500s, CORS issues, etc. must NOT clear a still-valid
+        // token — otherwise any transient server hiccup on page refresh logs the
+        // user out permanently until they sign in again.
+        if (err?.status === 401) {
+          clearToken();
+          clearUserId();
+          clearTenantId();
+        }
         setStatus(AUTH_STATUS.UNAUTHENTICATED);
       }
     };
