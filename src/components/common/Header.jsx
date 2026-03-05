@@ -246,8 +246,8 @@ const Header = () => {
       >
         {/* ── Main bar ── */}
         <div
-          style={{ maxWidth: 1400, padding: '0 32px', height: 80 }}
-          className="mx-auto flex items-center justify-between"
+          style={{ padding: '0 32px', height: 80 }}
+          className="mx-auto flex items-center"
         >
 
           {/* Logo — shows restaurant name when inside a restaurant */}
@@ -318,7 +318,7 @@ const Header = () => {
           </div>
 
           {/* Right actions */}
-          <div className="flex items-center flex-shrink-0" style={{ gap: 10, flex: 1, justifyContent: 'flex-end' }}>
+          <div className="flex items-center" style={{ gap: 10, flex: 1, justifyContent: 'flex-end' }}>
 
             {/* Notifications — protected; ProtectedRoute handles unauthenticated access */}
             {/* <Link
