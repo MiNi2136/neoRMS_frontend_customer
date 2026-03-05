@@ -15,7 +15,7 @@ import {
   ChevronDown, ChevronUp, Clock, ExternalLink,
 } from 'lucide-react';
 import { fetchMyOrders } from '../services/orderService';
-import { submitReview } from '../services/reviewService';
+import { submitReview, getReviewsByOrderId } from '../services/reviewService';
 import { getToken, getTenantId } from '../services/authService';
 import Toast, { useToast } from '../components/common/Toast';
 
@@ -254,8 +254,26 @@ const OrderHistoryPage = () => {
 
 /* ── Order Card ────────────────────────────────────────────────────────── */
 const OrderCard = ({ order, navigate }) => {
-  const [expanded,    setExpanded   ] = useState(false);
-  const [showReview,  setShowReview ] = useState(false);
+  const [expanded,        setExpanded       ] = useState(false);
+  const [showReview,      setShowReview     ] = useState(false);
+  const [existingReviews, setExistingReviews] = useState(null); // null = not fetched yet
+  const [reviewsFetching, setReviewsFetching] = useState(false);
+
+  /* Lazy-load existing reviews for this order, then open the modal */
+  const handleReviewClick = async () => {
+    if (existingReviews === null && !reviewsFetching) {
+      setReviewsFetching(true);
+      try {
+        const list = await getReviewsByOrderId(orderId);
+        setExistingReviews(Array.isArray(list) ? list : []);
+      } catch {
+        setExistingReviews([]); // on error fall back to empty (all editable)
+      } finally {
+        setReviewsFetching(false);
+      }
+    }
+    setShowReview(true);
+  };
 
   const orderId       = order._id ?? order.id ?? order.orderId ?? '';
   const shortId       = orderId.toString().slice(-8).toUpperCase();
@@ -342,17 +360,20 @@ const OrderCard = ({ order, navigate }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {orderStatus.toUpperCase() === 'COMPLETED' && (
               <button
-                onClick={() => setShowReview(true)}
+                onClick={handleReviewClick}
+                disabled={reviewsFetching}
                 style={{
                   padding: '5px 12px', borderRadius: 8,
                   fontSize: 12, fontWeight: 700,
-                  background: C.primary, color: '#fff',
-                  border: 'none', cursor: 'pointer',
+                  background: reviewsFetching ? '#F3A4A9' : C.primary, color: '#fff',
+                  border: 'none', cursor: reviewsFetching ? 'default' : 'pointer',
                   display: 'flex', alignItems: 'center', gap: 5,
                   boxShadow: '0 2px 6px rgba(230,57,70,0.28)',
                 }}
               >
-                ★ Review
+                {reviewsFetching
+                  ? <><span style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} /> Loading…</>
+                  : '★ Review'}
               </button>
             )}
             <button
@@ -373,7 +394,23 @@ const OrderCard = ({ order, navigate }) => {
           order={order}
           orderId={orderId}
           items={items}
+          existingReviews={existingReviews ?? []}
           onClose={() => setShowReview(false)}
+          onReviewSubmitted={(submitted) => {
+            setExistingReviews((prev) => {
+              const base = Array.isArray(prev) ? prev : [];
+              // Merge: replace existing entry for same menuProductId or append
+              const merged = [...base];
+              submitted.forEach((s) => {
+                const idx = merged.findIndex(
+                  (r) => (r.menuProductId ?? r.menuProduct?._id ?? r.menuProduct?.id ?? r.productId ?? '') === s.menuProductId
+                );
+                if (idx !== -1) merged[idx] = { ...merged[idx], ...s };
+                else merged.push(s);
+              });
+              return merged;
+            });
+          }}
         />,
         document.body
       )}
@@ -480,9 +517,20 @@ const StarRating = ({ value, onChange, disabled }) => (
 );
 
 /* ── Review Modal ───────────────────────────────────────────────────────────── */
-const ReviewModal = ({ order, orderId, items, onClose }) => {
+const ReviewModal = ({ order, orderId, items, onClose, existingReviews = [], onReviewSubmitted }) => {
   const [reviews, setReviews] = useState(() =>
-    items.map(() => ({ rating: 0, comment: '' }))
+    items.map((it) => {
+      const itemProductId = it.menuItemId ?? it.menuProductId ?? it.productId ?? '';
+      const existing = existingReviews.find((r) => {
+        const rId = r.menuProductId ?? r.menuProduct?._id ?? r.menuProduct?.id ?? r.productId ?? '';
+        return rId && rId === itemProductId;
+      });
+      return {
+        rating:   existing?.rating   ?? 0,
+        comment:  existing?.comment  ?? '',
+        isLocked: !!existing,
+      };
+    })
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted ] = useState(false);
@@ -492,28 +540,35 @@ const ReviewModal = ({ order, orderId, items, onClose }) => {
   const setRating  = (idx, val) => setReviews((prev) => prev.map((r, i) => i === idx ? { ...r, rating: val  } : r));
   const setComment = (idx, val) => setReviews((prev) => prev.map((r, i) => i === idx ? { ...r, comment: val } : r));
 
+  const allLocked = reviews.every((r) => r.isLocked);
+
   const handleSubmit = async () => {
-    /* Validate: at least one item must have a rating */
-    const hasAny = reviews.some((r) => r.rating > 0);
+    /* Validate: at least one non-locked item must have a rating */
+    const hasAny = reviews.some((r) => !r.isLocked && r.rating > 0);
     if (!hasAny) { setSubmitErr('Please rate at least one item before submitting.'); return; }
     setErrors([]);
     setSubmitErr('');
     setSubmitting(true);
     try {
+      const justSubmitted = [];
       for (let i = 0; i < items.length; i++) {
-        if (reviews[i].rating === 0) continue; // skip unrated items
+        if (reviews[i].isLocked) continue; // already reviewed — skip
+        if (reviews[i].rating === 0) continue; // unrated — skip
         const it = items[i];
         const menuProductId =
-          it.menuProductId ?? it.productId ?? it.menuProduct?._id ??
-          it.menuProduct?.id ?? it.product?._id ?? it.product?.id ??
-          it.itemId ?? it._id ?? it.id ?? '';
-        await submitReview({
+          it.menuItemId ?? it.menuProductId ?? it.productId ??
+          it.menuProduct?._id ?? it.menuProduct?.id ??
+          it.product?._id ?? it.product?.id ?? '';
+        const reviewRes = await submitReview({
           menuProductId,
           orderId,
           rating:  reviews[i].rating,
           comment: reviews[i].comment.trim(),
         });
+        console.log('review', reviewRes);
+        justSubmitted.push({ menuProductId, rating: reviews[i].rating, comment: reviews[i].comment.trim() });
       }
+      if (justSubmitted.length > 0 && onReviewSubmitted) onReviewSubmitted(justSubmitted);
       setSubmitted(true);
     } catch (err) {
       setSubmitErr(err?.response?.data?.message ?? err?.message ?? 'Failed to submit reviews.');
@@ -547,7 +602,10 @@ const ReviewModal = ({ order, orderId, items, onClose }) => {
           <div>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.dark }}>Rate Your Order</h2>
             <p style={{ margin: '3px 0 0', fontSize: 12, color: C.muted }}>Share your experience for the items</p>
-            <p style={{ margin: '3px 0 0', fontSize: 10,color: C.muted }}>You don't have to rate all items - you can rate any items you'd like</p>
+            {allLocked
+              ? <p style={{ margin: '3px 0 0', fontSize: 10, color: '#1E40AF' }}>You have already reviewed all items in this order.</p>
+              : <p style={{ margin: '3px 0 0', fontSize: 10, color: C.muted }}>You don't have to rate all items - you can rate any items you'd like</p>
+            }
           </div>
           <button
             onClick={onClose}
@@ -591,29 +649,37 @@ const ReviewModal = ({ order, orderId, items, onClose }) => {
                     </div>
 
                     {/* Stars */}
-                    <div style={{ marginBottom: 10 }}>
+                    <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
                       <StarRating
                         value={reviews[idx].rating}
                         onChange={(v) => setRating(idx, v)}
-                        disabled={submitting}
+                        disabled={submitting || reviews[idx].isLocked}
                       />
-                     
+                      {reviews[idx].isLocked && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 7px',
+                          borderRadius: 20, background: '#DBEAFE', color: '#1E40AF',
+                          letterSpacing: '0.3px',
+                        }}>Already reviewed</span>
+                      )}
                     </div>
 
                     {/* Comment */}
                     <textarea
                       rows={2}
-                      placeholder="Write a comment (optional)…"
+                      placeholder={reviews[idx].isLocked ? '' : 'Write a comment (optional)…'}
                       value={reviews[idx].comment}
                       onChange={(e) => setComment(idx, e.target.value)}
-                      disabled={submitting}
+                      disabled={submitting || reviews[idx].isLocked}
                       style={{
                         width: '100%', boxSizing: 'border-box',
                         border: `1px solid ${C.border}`, borderRadius: 8,
                         padding: '8px 10px', fontSize: 13, color: C.dark,
-                        resize: 'vertical', fontFamily: 'inherit',
-                        background: submitting ? '#F9FAFB' : '#fff',
+                        resize: reviews[idx].isLocked ? 'none' : 'vertical',
+                        fontFamily: 'inherit',
+                        background: (submitting || reviews[idx].isLocked) ? '#F3F4F6' : '#fff',
                         outline: 'none',
+                        cursor: reviews[idx].isLocked ? 'default' : 'text',
                       }}
                     />
                   </div>
@@ -628,7 +694,7 @@ const ReviewModal = ({ order, orderId, items, onClose }) => {
         </div>
 
         {/* Footer */}
-        {!submitted && (
+        {!submitted && !allLocked && (
           <div style={{
             padding: '14px 22px',
             borderTop: `1px solid ${C.border}`,
@@ -658,7 +724,7 @@ const ReviewModal = ({ order, orderId, items, onClose }) => {
             </button>
           </div>
         )}
-        {submitted && (
+        {(submitted || allLocked) && (
           <div style={{ padding: '14px 22px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end' }}>
             <button
               onClick={onClose}
