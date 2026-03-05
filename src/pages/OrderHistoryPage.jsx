@@ -7,6 +7,7 @@
    ───────────────────────────────────────────────────────────────── */
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBag, Loader2, AlertCircle,
@@ -14,6 +15,7 @@ import {
   ChevronDown, ChevronUp, Clock, ExternalLink,
 } from 'lucide-react';
 import { fetchMyOrders } from '../services/orderService';
+import { submitReview } from '../services/reviewService';
 import { getToken, getTenantId } from '../services/authService';
 import Toast, { useToast } from '../components/common/Toast';
 
@@ -61,6 +63,8 @@ const OrderHistoryPage = () => {
   const [error,        setError       ] = useState('');
   const [toast,        setToast       ] = useToast();
   const [successBanner, setSuccessBanner] = useState('');
+  const [currentPage,  setCurrentPage ] = useState(1);
+  const PAGE_SIZE = 10;
 
   /* Session guard — redirect to sign-in if token or tenantId is missing */
   useEffect(() => {
@@ -147,16 +151,59 @@ const OrderHistoryPage = () => {
       );
     }
 
+    const sorted = [...orders].sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    });
+    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+    const safePage   = Math.min(currentPage, totalPages);
+    const pageItems  = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
     return (
       <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: C.dark, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Package size={22} color={C.primary} /> My Orders
-        </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.dark, margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Package size={22} color={C.primary} /> My Orders
+          </h1>
+          <span style={{ fontSize: 13, color: C.muted }}>{sorted.length} order{sorted.length !== 1 ? 's' : ''}</span>
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {[...orders].reverse().map((order) => (
+          {pageItems.map((order) => (
             <OrderCard key={order._id ?? order.id ?? order.orderId} order={order} navigate={navigate} />
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 28 }}>
+            <button
+              className="oh-page-btn"
+              disabled={safePage === 1}
+              onClick={() => setCurrentPage(safePage - 1)}
+            >‹ Prev</button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                className={`oh-page-btn${p === safePage ? ' oh-page-active' : ''}`}
+                onClick={() => setCurrentPage(p)}
+              >{p}</button>
+            ))}
+
+            <button
+              className="oh-page-btn"
+              disabled={safePage === totalPages}
+              onClick={() => setCurrentPage(safePage + 1)}
+            >Next ›</button>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <p style={{ textAlign: 'center', fontSize: 12, color: C.muted, marginTop: 10 }}>
+            Page {safePage} of {totalPages}
+          </p>
+        )}
       </div>
     );
   };
@@ -172,6 +219,10 @@ const OrderHistoryPage = () => {
         .oh-card:hover { box-shadow: 0 6px 28px rgba(31,41,55,0.13); transform: translateY(-1px); }
         .oh-toggle-btn { background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 4px 6px; border-radius: 6px; transition: background-color 0.15s; }
         .oh-toggle-btn:hover { background: rgba(0,0,0,0.05); }
+        .oh-page-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid ${C.border}; background: #fff; color: ${C.dark}; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+        .oh-page-btn:hover:not(:disabled) { background: ${C.primary}; color: #fff; border-color: ${C.primary}; }
+        .oh-page-btn:disabled { opacity: 0.38; cursor: default; }
+        .oh-page-active { background: ${C.primary} !important; color: #fff !important; border-color: ${C.primary} !important; }
         @keyframes bannerIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
@@ -203,7 +254,8 @@ const OrderHistoryPage = () => {
 
 /* ── Order Card ────────────────────────────────────────────────────────── */
 const OrderCard = ({ order, navigate }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded,    setExpanded   ] = useState(false);
+  const [showReview,  setShowReview ] = useState(false);
 
   const orderId       = order._id ?? order.id ?? order.orderId ?? '';
   const shortId       = orderId.toString().slice(-8).toUpperCase();
@@ -256,15 +308,13 @@ const OrderCard = ({ order, navigate }) => {
               #{shortId}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{
-              padding: '3px 9px', borderRadius: 20,
-              fontSize: 11, fontWeight: 700,
-              background: osBadge.bg, color: osBadge.color,
-            }}>
-              {osBadge.label}
-            </span>
-          </div>
+          <span style={{
+            padding: '3px 9px', borderRadius: 20,
+            fontSize: 11, fontWeight: 700,
+            background: osBadge.bg, color: osBadge.color,
+          }}>
+            {osBadge.label}
+          </span>
         </div>
 
         {/* Row 2: Meta chips */}
@@ -273,47 +323,60 @@ const OrderCard = ({ order, navigate }) => {
             <MetaChip icon={<Tag size={11} />} text={orderType} />
           )}
           {payMethod && (
-            <MetaChip icon={<CreditCard size={11} />} text={payMethod} />
+            <MetaChip
+              icon={<CreditCard size={11} />}
+              text={payMethod + (payStatus ? ` (${payStatusStyle(payStatus).label})` : '')}
+            />
           )}
+          <MetaChip icon={<Package size={11} />} text={`${items.length} item${items.length !== 1 ? 's' : ''}`} />
           {createdAt && (
             <MetaChip icon={<Calendar size={11} />} text={createdAt} />
           )}
         </div>
 
-        {/* Total */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Total</span>
-          <span style={{ fontSize: 16, fontWeight: 800, color: C.primary }}>${total.toFixed(2)}</span>
-        </div>
-
-        {/* Row 3: Items preview + toggle */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>
-            {items.length} item{items.length !== 1 ? 's' : ''}
-            {items.length > 0 && !expanded && (
-              <span style={{ color: C.dark }}>
-                {' — '}
-                {items.slice(0, 2).map((it, i) => (
-                  <span key={i}>
-                    {it.name ?? it.title ?? 'Item'}
-                    {it.quantity > 1 ? ` ×${it.quantity}` : ''}
-                    {i < Math.min(items.length, 2) - 1 ? ', ' : ''}
-                  </span>
-                ))}
-                {items.length > 2 && ` +${items.length - 2} more`}
-              </span>
+        {/* Total + Details toggle + Review — same row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>
+            Total&nbsp;<span style={{ color: C.primary, fontSize: 16, fontWeight: 800 }}>${total.toFixed(2)}</span>
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {orderStatus.toUpperCase() === 'COMPLETED' && (
+              <button
+                onClick={() => setShowReview(true)}
+                style={{
+                  padding: '5px 12px', borderRadius: 8,
+                  fontSize: 12, fontWeight: 700,
+                  background: C.primary, color: '#fff',
+                  border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  boxShadow: '0 2px 6px rgba(230,57,70,0.28)',
+                }}
+              >
+                ★ Review
+              </button>
             )}
-          </p>
-          <button
-            className="oh-toggle-btn"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            style={{ color: C.primary }}
-          >
-            {expanded ? <><ChevronUp size={14} /> Hide</> : <><ChevronDown size={14} /> Details</>}
-          </button>
+            <button
+              className="oh-toggle-btn"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              style={{ color: C.primary }}
+            >
+              {expanded ? <><ChevronUp size={14} /> Hide</> : <><ChevronDown size={14} /> Details</>}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ── Review Modal (portalled to body) ── */}
+      {showReview && createPortal(
+        <ReviewModal
+          order={order}
+          orderId={orderId}
+          items={items}
+          onClose={() => setShowReview(false)}
+        />,
+        document.body
+      )}
 
       {/* ── Expanded: full detail ── */}
       {expanded && (
@@ -390,6 +453,220 @@ const OrderCard = ({ order, navigate }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ── Star Rating ───────────────────────────────────────────────────────────── */
+const StarRating = ({ value, onChange, disabled }) => (
+  <div style={{ display: 'flex', gap: 2 }}>
+    {[1, 2, 3, 4, 5].map((star) => (
+      <button
+        key={star}
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(star)}
+        style={{
+          background: 'none', border: 'none',
+          cursor: disabled ? 'default' : 'pointer',
+          fontSize: 22, lineHeight: 1, padding: '0 1px',
+          color: star <= value ? '#F59E0B' : '#D1D5DB',
+          transition: 'color 0.1s',
+        }}
+        aria-label={`${star} star`}
+      >★</button>
+    ))}
+  </div>
+);
+
+/* ── Review Modal ───────────────────────────────────────────────────────────── */
+const ReviewModal = ({ order, orderId, items, onClose }) => {
+  const [reviews, setReviews] = useState(() =>
+    items.map(() => ({ rating: 0, comment: '' }))
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted,  setSubmitted ] = useState(false);
+  const [errors,     setErrors    ] = useState([]);
+  const [submitErr,  setSubmitErr ] = useState('');
+
+  const setRating  = (idx, val) => setReviews((prev) => prev.map((r, i) => i === idx ? { ...r, rating: val  } : r));
+  const setComment = (idx, val) => setReviews((prev) => prev.map((r, i) => i === idx ? { ...r, comment: val } : r));
+
+  const handleSubmit = async () => {
+    /* Validate: at least one item must have a rating */
+    const hasAny = reviews.some((r) => r.rating > 0);
+    if (!hasAny) { setSubmitErr('Please rate at least one item before submitting.'); return; }
+    setErrors([]);
+    setSubmitErr('');
+    setSubmitting(true);
+    try {
+      for (let i = 0; i < items.length; i++) {
+        if (reviews[i].rating === 0) continue; // skip unrated items
+        const it = items[i];
+        const menuProductId =
+          it.menuProductId ?? it.productId ?? it.menuProduct?._id ??
+          it.menuProduct?.id ?? it.product?._id ?? it.product?.id ??
+          it.itemId ?? it._id ?? it.id ?? '';
+        await submitReview({
+          menuProductId,
+          orderId,
+          rating:  reviews[i].rating,
+          comment: reviews[i].comment.trim(),
+        });
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitErr(err?.response?.data?.message ?? err?.message ?? 'Failed to submit reviews.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: 18, width: '100%', maxWidth: 520,
+        height: '80vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '18px 22px 14px',
+          borderBottom: `1px solid ${C.border}`,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.dark }}>Rate Your Order</h2>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: C.muted }}>Share your experience for the items</p>
+            <p style={{ margin: '3px 0 0', fontSize: 10,color: C.muted }}>You don't have to rate all items - you can rate any items you'd like</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 22, lineHeight: 1, padding: 4 }}
+            aria-label="Close"
+          >×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 22px' }}>
+          {submitted ? (
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: C.dark, margin: '0 0 8px' }}>Thank you!</h3>
+              <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>Your reviews have been submitted.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {items.map((it, idx) => {
+                const name = it.name ?? it.title ?? `Item ${idx + 1}`;
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 12, padding: '14px 16px',
+                      background: reviews[idx].rating > 0 ? '#F0FDF4' : '#FAFAFA',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.dark }}>{name}</p>
+                        {it.variantName && (
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: C.muted }}>Variant: {it.variantName}</p>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.muted, flexShrink: 0 }}>
+                        ×{it.quantity ?? 1}
+                      </span>
+                    </div>
+
+                    {/* Stars */}
+                    <div style={{ marginBottom: 10 }}>
+                      <StarRating
+                        value={reviews[idx].rating}
+                        onChange={(v) => setRating(idx, v)}
+                        disabled={submitting}
+                      />
+                     
+                    </div>
+
+                    {/* Comment */}
+                    <textarea
+                      rows={2}
+                      placeholder="Write a comment (optional)…"
+                      value={reviews[idx].comment}
+                      onChange={(e) => setComment(idx, e.target.value)}
+                      disabled={submitting}
+                      style={{
+                        width: '100%', boxSizing: 'border-box',
+                        border: `1px solid ${C.border}`, borderRadius: 8,
+                        padding: '8px 10px', fontSize: 13, color: C.dark,
+                        resize: 'vertical', fontFamily: 'inherit',
+                        background: submitting ? '#F9FAFB' : '#fff',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                );
+              })}
+
+              {submitErr && (
+                <p style={{ margin: 0, fontSize: 13, color: '#EF4444', textAlign: 'center' }}>{submitErr}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!submitted && (
+          <div style={{
+            padding: '14px 22px',
+            borderTop: `1px solid ${C.border}`,
+            display: 'flex', gap: 10, justifyContent: 'flex-end',
+          }}>
+            <button
+              onClick={onClose}
+              disabled={submitting}
+              style={{
+                padding: '9px 20px', borderRadius: 10, border: `1px solid ${C.border}`,
+                background: '#fff', color: C.dark, fontWeight: 600, fontSize: 14, cursor: 'pointer',
+              }}
+            >Cancel</button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              style={{
+                padding: '9px 24px', borderRadius: 10, border: 'none',
+                background: submitting ? '#F3A4A9' : C.primary,
+                color: '#fff', fontWeight: 700, fontSize: 14, cursor: submitting ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              {submitting ? (
+                <><span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} /> Submitting…</>
+              ) : 'Submit Reviews'}
+            </button>
+          </div>
+        )}
+        {submitted && (
+          <div style={{ padding: '14px 22px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={onClose}
+              style={{ padding: '9px 24px', borderRadius: 10, border: 'none', background: C.primary, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+            >Done</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
