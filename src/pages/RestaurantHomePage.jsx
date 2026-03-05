@@ -85,7 +85,7 @@ const RestaurantHomePage = () => {
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 64px' }}>
         {/* ── Quick Actions ── */}
-        <section style={{ marginBottom: 64 }}>
+        <section style={{ marginBottom: 64, paddingTop: 64 }}>
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <span style={{
               display: 'inline-block', background: 'rgba(230,57,70,0.10)',
@@ -102,8 +102,9 @@ const RestaurantHomePage = () => {
 
           <div style={{
             display:             'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 240px))',
             gap:                 20,
+            justifyContent:      'center',
           }}>
             {quickActions.map(({ to, icon, label, desc }) => (
               <QuickCard key={to} to={to} icon={icon} label={label} desc={desc} />

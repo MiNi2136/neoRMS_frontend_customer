@@ -65,7 +65,7 @@ const Header = () => {
     ? [
         { to: `/restaurant/${restaurantId}`,       label: 'Home'              },
         { to: `/restaurant/${restaurantId}/menu`,  label: 'Menu'              },
-        ...(isAuthenticated ? [{ to: '/order', label: 'Past Orders' }] : []),
+        ...(isAuthenticated ? [{ to: '/order', label: 'Order History' }] : []),
         { to: `/restaurant/${restaurantId}/about`, label: 'About Us'          },
       ]
     : isRestaurantsPage
@@ -251,7 +251,7 @@ const Header = () => {
         >
 
           {/* Logo — shows restaurant name when inside a restaurant */}
-          <Link to={logoTo} className="flex items-center gap-2 flex-shrink-0" style={{ textDecoration: 'none' }}>
+          <Link to={logoTo} className="flex items-center gap-2 flex-shrink-0" style={{ textDecoration: 'none', flex: 1 }}>
             <div style={{
               width: 40, height: 40, borderRadius: '50%',
               backgroundColor: C.primary, flexShrink: 0,
@@ -318,7 +318,7 @@ const Header = () => {
           </div>
 
           {/* Right actions */}
-          <div className="flex items-center flex-shrink-0" style={{ gap: 10 }}>
+          <div className="flex items-center flex-shrink-0" style={{ gap: 10, flex: 1, justifyContent: 'flex-end' }}>
 
             {/* Notifications — protected; ProtectedRoute handles unauthenticated access */}
             {/* <Link
