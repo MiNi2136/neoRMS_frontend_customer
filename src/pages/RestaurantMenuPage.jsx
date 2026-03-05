@@ -16,6 +16,7 @@ import { Utensils } from 'lucide-react';
 import FoodCard  from '../components/menu/FoodCard';
 import FoodModal from '../components/menu/FoodModal';
 import { getRestaurantMenu } from '../services/restaurantService';
+import { getReviewsByMenuProductId } from '../services/reviewService';
 
 /* ── Theme tokens ── */
 const T = {
@@ -157,7 +158,7 @@ const useInView = (threshold = 0.08) => {
 };
 
 /* ── Category section ── */
-const CategorySection = ({ category, onSelectItem }) => {
+const CategorySection = ({ category, onSelectItem, reviewsMap = {} }) => {
   const [ref, inView] = useInView(0.06);
   return (
     <section
@@ -179,7 +180,7 @@ const CategorySection = ({ category, onSelectItem }) => {
             className={inView ? 'rm-fade-in' : 'opacity-0'}
             style={{ animationDelay: `${0.06 * i}s` }}
           >
-            <FoodCard item={item} onClick={onSelectItem} />
+            <FoodCard item={item} onClick={onSelectItem} reviewData={reviewsMap[item.id]} />
           </div>
         ))}
       </div>
@@ -196,6 +197,8 @@ const RestaurantMenuPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading,    setLoading   ] = useState(true);
   const [apiError,   setApiError  ] = useState(null);
+  // { [productId]: { avgRating: number, reviews: Array } } — populated async after menu loads
+  const [reviewsMap, setReviewsMap] = useState({});
 
   /* ── Fetch menu — only when restaurantId is present ── */
   useEffect(() => {
@@ -213,9 +216,29 @@ const RestaurantMenuPage = () => {
     getRestaurantMenu(restaurantId)
       .then((items) => {
         if (cancelled) return;
-        const cats = buildCategories(items.map(normalise));
+        const normalised = items.map(normalise);
+        const cats = buildCategories(normalised);
         setCategories(cats);
         setActiveTab(cats[0]?.id ?? null);
+
+        // Fetch reviews for every product in parallel, compute avg rating and cache
+        normalised.forEach((product) => {
+          if (!product.id) return;
+          getReviewsByMenuProductId(product.id)
+            .then((reviews) => {
+              console.log(
+                `%c[Reviews] ${product.name} (${product.id})`,
+                'color:#E63946;font-weight:bold',
+                reviews,
+              );
+              if (!Array.isArray(reviews) || reviews.length === 0) return;
+              const avgRating = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length;
+              setReviewsMap((prev) => ({ ...prev, [product.id]: { avgRating, reviews } }));
+            })
+            .catch((err) => {
+              console.warn(`[Reviews] Failed for product ${product.id}:`, err?.message ?? err);
+            });
+        });
       })
       .catch((err) => {
         if (!cancelled) setApiError(err?.message || 'Failed to load menu.');
@@ -351,7 +374,8 @@ const RestaurantMenuPage = () => {
               <CategorySection
                 key={cat.id}
                 category={cat}
-                onSelectItem={setSelected}
+                reviewsMap={reviewsMap}
+                onSelectItem={(item) => setSelected({ ...item, ...(reviewsMap[item.id] ?? {}) })}
               />
             ))
           )}

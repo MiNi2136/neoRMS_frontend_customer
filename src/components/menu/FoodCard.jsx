@@ -10,7 +10,7 @@ const T = {
   border:  '#E5E7EB',
 };
 
-const FoodCard = ({ item, onClick }) => {
+const FoodCard = ({ item, onClick, reviewData }) => {
   /* -- Price display ----------------------------------------------- */
   const displayPrice = (() => {
     if (Array.isArray(item.variants) && item.variants.length > 0) {
@@ -53,7 +53,7 @@ const FoodCard = ({ item, onClick }) => {
       className="relative overflow-hidden"
       style={{ aspectRatio: '1/1', borderRadius: 10, marginBottom: 12, background: '#F3F4F6' }}
     >
-      {/* Single <img> always rendered — onError swaps src to placeholder */}
+      {/* Single <img> always rendered ï¿½ onError swaps src to placeholder */}
       <img
         src={imgSrc}
         alt={item.name ?? 'Menu item'}
@@ -79,7 +79,7 @@ const FoodCard = ({ item, onClick }) => {
         </span>
       )}
 
-      {/* Unavailable overlay — driven by status, NOT image load result */}
+      {/* Unavailable overlay ï¿½ driven by status, NOT image load result */}
       {item.isAvailable === false && (
         <div style={{
           position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.55)',
@@ -88,7 +88,22 @@ const FoodCard = ({ item, onClick }) => {
           <span style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', background: '#FEF2F2', padding: '3px 10px', borderRadius: 4 }}>Unavailable</span>
         </div>
       )}
-    </div>
+      {/* Avg rating badge â€” bottom-right of image */}
+      {reviewData?.avgRating > 0 && (
+        <span style={{
+          position: 'absolute', bottom: 8, right: 8,
+          backgroundColor: 'rgba(0,0,0,0.58)',
+          backdropFilter: 'blur(4px)',
+          color: '#fff',
+          fontSize: 11, fontWeight: 700,
+          padding: '3px 8px', borderRadius: 20,
+          display: 'flex', alignItems: 'center', gap: 3,
+          pointerEvents: 'none',
+        }}>
+          <span style={{ color: '#F59E0B' }}>&#9733;</span>
+          {reviewData.avgRating.toFixed(1)}
+        </span>
+      )}    </div>
 
     {/* -- Content -- */}
     <div style={{ padding: '0 4px 4px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
