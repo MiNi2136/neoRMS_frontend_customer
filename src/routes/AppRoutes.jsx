@@ -65,6 +65,9 @@ import OrderHistoryPage       from '../pages/OrderHistoryPage';
 import ReorderPage            from '../pages/ReorderPage';
 import NotificationsPage      from '../pages/NotificationsPage';
 import OrderConfirmationPage  from '../pages/OrderConfirmationPage';
+import PaymentSuccessPage     from '../pages/paymentStatus/PaymentSuccessPage';
+import PaymentFailPage        from '../pages/paymentStatus/PaymentFailPage';
+import PaymentCancelPage      from '../pages/paymentStatus/PaymentCancelPage';
 
 const AppRoutes = () => (
   <BrowserRouter>
@@ -98,6 +101,11 @@ const AppRoutes = () => (
 
                   {/* ── Restaurant explorer ── */}
                   <Route path="/restaurants" element={<RestaurantsPage />} />
+
+                  {/* ── Payment gateway callbacks (public — gateway redirects here after payment) ── */}
+                  <Route path="/payment/success" element={<PaymentSuccessPage />} />
+                  <Route path="/payment/fail"    element={<PaymentFailPage />} />
+                  <Route path="/payment/cancel"  element={<PaymentCancelPage />} />
 
                   {/* ── Restaurant-specific experience ──────────────────────
                         RestaurantBoundary fetches the restaurant by :restaurantId,

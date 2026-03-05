@@ -211,8 +211,7 @@ const OrderCard = ({ order, navigate }) => {
   const payStatus     = order.paymentStatus ?? order.payment_status ?? '';
   const payMethod     = order.paymentMethod ?? order.payment_method ?? '';
   const orderType     = (order.orderType ?? order.order_type ?? '').replace('_', ' ');
-  // Backend stores money as integer cents (e.g. 846 = $8.46) → divide by 100 for display
-  const total         = Number(order.totalPrice ?? order.total ?? 0) / 100;
+  const total         = Number(order.totalPrice ?? order.total ?? 0);
   const items         = order.items ?? [];
   const createdAt     = order.createdAt
     ? new Date(order.createdAt).toLocaleString('en-US', {
@@ -221,16 +220,16 @@ const OrderCard = ({ order, navigate }) => {
       })
     : '';
 
-  // Pricing breakdown — use backend fields when present (cents), derive otherwise (dollars)
-  const itemsSubtotal = items.reduce((s, it) => s + (Number(it.price ?? 0) / 100) * (it.quantity ?? 1), 0);
-  const subtotal  = order.subtotal  != null ? Number(order.subtotal)  / 100
-                  : order.subTotal  != null ? Number(order.subTotal)  / 100
+  // Pricing breakdown
+  const itemsSubtotal = items.reduce((s, it) => s + Number(it.price ?? 0) * (it.quantity ?? 1), 0);
+  const subtotal  = order.subtotal  != null ? Number(order.subtotal)
+                  : order.subTotal  != null ? Number(order.subTotal)
                   : itemsSubtotal;
-  const tax       = order.tax       != null ? Number(order.tax)       / 100
-                  : order.taxAmount != null ? Number(order.taxAmount) / 100
+  const tax       = order.tax       != null ? Number(order.tax)
+                  : order.taxAmount != null ? Number(order.taxAmount)
                   : subtotal * 0.08;
-  const serviceFee= order.serviceFee   != null ? Number(order.serviceFee)   / 100
-                  : order.service_fee  != null ? Number(order.service_fee)  / 100
+  const serviceFee= order.serviceFee   != null ? Number(order.serviceFee)
+                  : order.service_fee  != null ? Number(order.service_fee)
                   : (total - subtotal - tax > 0 ? total - subtotal - tax : 1.99);
   const estMins   = order.estimatedDeliveryTimeInMinutes ?? order.estimatedDeliveryTime ?? null;
 
@@ -258,15 +257,6 @@ const OrderCard = ({ order, navigate }) => {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {payBadge && (
-              <span style={{
-                padding: '3px 9px', borderRadius: 20,
-                fontSize: 11, fontWeight: 700,
-                background: payBadge.bg, color: payBadge.color,
-              }}>
-                {payBadge.label}
-              </span>
-            )}
             <span style={{
               padding: '3px 9px', borderRadius: 20,
               fontSize: 11, fontWeight: 700,
@@ -362,7 +352,7 @@ const OrderCard = ({ order, navigate }) => {
                     )}
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 600, color: C.dark, flexShrink: 0, marginLeft: 12 }}>
-                    ${((Number(it.price ?? 0) / 100) * (it.quantity ?? 1)).toFixed(2)}
+                    ${(Number(it.price ?? 0) * (it.quantity ?? 1)).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -398,25 +388,6 @@ const OrderCard = ({ order, navigate }) => {
               </div>
             )}
           </div>
-
-          {/* View full details link */}
-          {orderId && (
-            <button
-              onClick={() => navigate(`/order/${orderId}`)}
-              style={{
-                width: '100%', padding: '9px 0', borderRadius: 10,
-                background: 'transparent', color: C.primary,
-                border: `1.5px solid ${C.primary}`,
-                fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                transition: 'background-color 0.15s',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            >
-              <ExternalLink size={13} /> View Full Details
-            </button>
-          )}
         </div>
       )}
     </div>

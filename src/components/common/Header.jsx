@@ -22,10 +22,9 @@ const C = {
 
 const BASE_NAV_LINKS = [
   { to: '/',             label: 'Home' },
-  { to: '/restaurants',  label: 'Restaurants' },
-  { to: '/daily-menu',   label: 'Daily Menu' },
-  { to: '/order',        label: 'Order Food Online' },
-  { to: '/reservations', label: 'Dine In' },
+  { to: '/daily-menu',   label: 'Menu' },
+  // { to: '/order',        label: 'Order Food Online' },
+  // { to: '/reservations', label: 'Dine In' },
 ];
 
 const Header = () => {
@@ -60,23 +59,20 @@ const Header = () => {
      - On /                 → Home + Restaurants
      - Everywhere else      → standard BASE_NAV_LINKS
   */
+  const isAuthenticated = status === AUTH_STATUS.AUTHENTICATED;
+
   const navLinks = restaurantId
     ? [
         { to: `/restaurant/${restaurantId}`,       label: 'Home'              },
-        { to: '/restaurants',                      label: 'Restaurants',       onClick: clearCurrentRestaurant },
-        { to: `/restaurant/${restaurantId}/menu`,  label: 'Daily Menu'        },
-        { to: `/restaurant/${restaurantId}/menu`,  label: 'Order Food Online' },
-        { to: '/reservations',                     label: 'Dine In'           },
+        { to: `/restaurant/${restaurantId}/menu`,  label: 'Menu'              },
+        ...(isAuthenticated ? [{ to: '/order', label: 'Past Orders' }] : []),
         { to: `/restaurant/${restaurantId}/about`, label: 'About Us'          },
       ]
     : isRestaurantsPage
-      ? [
-          { to: '/restaurants', label: 'Restaurants' },
-        ]
+      ? []
     : isHome
       ? [
-          { to: '/',            label: 'Home'        },
-          { to: '/restaurants', label: 'Restaurants' },
+          { to: '/', label: 'Home' },
         ]
       : BASE_NAV_LINKS;
 
@@ -325,23 +321,24 @@ const Header = () => {
           <div className="flex items-center flex-shrink-0" style={{ gap: 10 }}>
 
             {/* Notifications — protected; ProtectedRoute handles unauthenticated access */}
-            <Link
+            {/* <Link
               to="/notifications"
               className="nb-icon-btn relative flex items-center justify-center rounded-full flex-shrink-0"
               style={{ width: 44, height: 44, backgroundColor: iconBg }}
               aria-label="Notifications"
-            >
-              <Bell size={20} color={iconColor} />
+            > */}
+              {/* <Bell size={20} color={iconColor} /> */}
               {/* static unread dot */}
-              <span style={{
+              {/* <span style={{
                 position: 'absolute', top: 4, right: 4,
                 width: 9, height: 9, borderRadius: '50%',
                 backgroundColor: '#EF4444',
                 boxShadow: '0 0 0 2px ' + (onHero ? 'transparent' : '#fff'),
               }} />
-            </Link>
+            </Link> */}
 
-            {/* Cart — opens modal if not authenticated; navigates to /cart if authenticated */}
+            {/* Cart — hidden on /restaurants; opens modal if not authenticated */}
+            {!isRestaurantsPage && (
             <button
               onClick={handleCartClick}
               className="nb-icon-btn relative flex items-center justify-center rounded-full flex-shrink-0"
@@ -362,6 +359,7 @@ const Header = () => {
                 </span>
               )}
             </button>
+            )}
 
             <div style={{ width: 6 }} className="hidden sm:block" />
 
@@ -401,13 +399,6 @@ const Header = () => {
 
                 {userMenuOpen && (
                   <div className="nb-user-menu">
-                    <Link
-                      to="/order"
-                      className="nb-user-item"
-                      onClick={() => setUserMenuOpen(false)}
-                    >
-                      <ShoppingCart size={15} /> My Orders
-                    </Link>
                     <button
                       className="nb-user-item danger"
                       onClick={() => { setUserMenuOpen(false); logout(); }}
@@ -441,8 +432,8 @@ const Header = () => {
               </button>
             )}
 
-            {/* Book A Table CTA — only shown when authenticated or on desktop */}
-            {status === AUTH_STATUS.AUTHENTICATED && (
+            {/* Book A Table CTA — hidden on /restaurants */}
+            {status === AUTH_STATUS.AUTHENTICATED && !isRestaurantsPage && (
               <Link
                 to="/reservations"
                 className={`hidden lg:flex items-center flex-shrink-0 ${onHero ? 'nb-cta-ghost' : 'nb-cta'}`}

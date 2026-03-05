@@ -34,30 +34,65 @@ import apiClient from './apiClient';
  * @returns {Array}          - cleaned items array ready for the API
  */
 export const buildOrderItems = (cartItems) =>
-  cartItems.map((item) => ({
-    menuItemId: item._id  ?? item.menuItemId ?? item.id ?? '',
-    name:       item.name ?? item.title     ?? item.productName ?? '',
-    quantity:   item.quantity ?? 1,
-    // Backend expects integer cents: $8.46 → 846
-    price:      Math.round(Number(item.price ?? 0) * 100),
-    // variantId is stored on the cart item by FoodModal from the backend variant object.
-    // Never set to undefined — backend validates this field strictly.
-    variantId:  item.variantId ?? '',
-    notes:      item.notes ?? '',
-    ...((item.addons ?? []).length > 0
-      ? {
-          addons: item.addons.map((a) => ({
-            addonId: a.addonId ?? a._id ?? a.id ?? a.name ?? '',
-            name:    a.name   ?? '',
-            // Backend expects integer cents
-            price:   Math.round(Number(a.price ?? 0) * 100),
-          })),
-        }
-      : {}),
-  }));
+  cartItems.map((item) => {
+    const base = {
+      menuItemId: item._id  ?? item.menuItemId ?? item.id ?? '',
+      name:       item.name ?? item.title     ?? item.productName ?? '',
+      quantity:   item.quantity ?? 1,
+      // Backend expects integer cents: $8.46 → 846
+      price:      item.price ?? 0,
+      // variantId is required by the backend — never omit
+      variantId:  item.variantId ?? '',
+    };
+    // Only include notes when non-empty
+    if (item.notes?.trim()) base.notes = item.notes.trim();
+    // Only include addons when present
+    const addons = (item.addons ?? []).filter(Boolean);
+    if (addons.length > 0) {
+      base.addons = addons.map((a) => ({
+        addonId: a.addonId ?? a._id ?? a.id ?? a.name ?? '',
+        name:    a.name   ?? '',
+        // Backend expects integer cents
+        price:   Math.round(Number(a.price ?? 0) * 100),
+      }));
+    }
+    return base;
+  });
 
 export const placeOrder = (orderPayload) =>
   apiClient.post('/order', orderPayload);
+
+/**
+ * Build the full order payload ready to POST to /order.
+ * Omits every optional field that has no value so the backend
+ * never receives null / empty-string / undefined for optional keys.
+ *
+ * @param {Object} opts
+ * @param {string}   opts.restaurantId
+ * @param {string}   opts.orderType          - 'DINE_IN' | 'TAKEAWAY'
+ * @param {string}   opts.paymentMethod      - 'CASH' | 'ONLINE_PAYMENT'
+ * @param {number}   opts.totalPrice         - integer cents after discount
+ * @param {Array}    opts.cartItems          - raw items from CartContext
+ * @param {string}   [opts.tableId]          - required for DINE_IN
+ * @param {string}   [opts.couponId]         - UUID returned by /coupon/validate
+ * @param {string}   [opts.notes]            - free-text customer notes
+ * @param {number}   [opts.estimatedDeliveryTimeInMinutes]
+ * @returns {Object} payload ready for placeOrder()
+ */
+export const buildOrderPayload = ({ restaurantId, orderType, paymentMethod, totalPrice, cartItems, tableId, couponId, notes, estimatedDeliveryTimeInMinutes }) => {
+  const payload = {
+    restaurantId,
+    orderType,
+    paymentMethod,
+    totalPrice,
+    items: buildOrderItems(cartItems),
+  };
+  if (orderType === 'DINE_IN' && tableId)                  payload.tableId = tableId;
+  if (couponId)                                            payload.couponId = couponId;
+  if (notes?.trim())                                       payload.notes = notes.trim();
+  if (estimatedDeliveryTimeInMinutes != null)              payload.estimatedDeliveryTimeInMinutes = estimatedDeliveryTimeInMinutes;
+  return payload;
+};
 
 /**
  * POST /coupon/validate

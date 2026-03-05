@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { MapPin, Phone, Utensils } from 'lucide-react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { theme } from '../../theme/colors';
@@ -52,6 +53,25 @@ const Footer = () => {
             <p style={{ fontSize: 13, color: C.muted, margin: 0, lineHeight: 1.6 }}>
               {tagline}
             </p>
+          </div>
+
+          {/* Quick links column */}
+          <div style={{ flex: '1 1 180px' }}>
+            <h4 style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: C.primary, marginBottom: 12 }}>
+              Buttons
+            </h4>
+            <Link
+              to="/restaurants"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontSize: 13, color: C.muted, textDecoration: 'none',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = C.primary)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = C.muted)}
+            >
+              All Restaurants
+            </Link>
           </div>
 
           {/* Location + contact (only shown when data exists) */}
