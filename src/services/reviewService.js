@@ -33,3 +33,17 @@ export const getReviewsByOrderId = async (orderId) => {
   // Unwrap common envelope shapes: [], { data: [] }, { reviews: [] }
   return Array.isArray(res) ? res : res?.data ?? res?.reviews ?? [];
 };
+
+/**
+ * Fetch all reviews for a specific menu product.
+ * GET /review/my/menu-product/:menuProductId
+ * x-tenant-id and Authorization headers are attached automatically by apiClient.
+ *
+ * @param {string} menuProductId
+ * @returns {Promise<Array>} array of review objects
+ */
+export const getReviewsByMenuProductId = async (menuProductId) => {
+  const res = await apiClient.get(`/review/my/menu-product/${menuProductId}`);
+  // Unwrap common envelope shapes: [], { data: [] }, { reviews: [] }
+  return Array.isArray(res) ? res : res?.data ?? res?.reviews ?? [];
+};

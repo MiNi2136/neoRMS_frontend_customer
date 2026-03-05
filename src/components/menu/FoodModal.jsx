@@ -378,6 +378,45 @@ const FoodModal = ({ item, onClose, restaurantId = null }) => {
               </div>
             )}
 
+            {/* -- Customer Reviews -- */}
+            {Array.isArray(item.reviews) && item.reviews.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: T.dark, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  Customer Reviews
+                  {item.avgRating > 0 && (
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      &#9733; {item.avgRating.toFixed(1)}
+                      <span style={{ fontSize: 11, color: T.muted, fontWeight: 500 }}>({item.reviews.length})</span>
+                    </span>
+                  )}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {item.reviews.map((r, i) => (
+                    <div
+                      key={r.id ?? i}
+                      style={{
+                        borderLeft: `3px solid ${T.primary}`,
+                        paddingLeft: 12,
+                        paddingTop: 2,
+                        paddingBottom: 2,
+                      }}
+                    >
+                      {/* Star row */}
+                      <div style={{ display: 'flex', gap: 2, marginBottom: r.comment ? 4 : 0 }}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <span key={s} style={{ fontSize: 13, color: s <= r.rating ? '#F59E0B' : '#D1D5DB' }}>&#9733;</span>
+                        ))}
+                      </div>
+                      {/* Comment */}
+                      {r.comment && (
+                        <p style={{ margin: 0, fontSize: 13, color: T.muted, lineHeight: 1.55 }}>{r.comment}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Divider */}
             <div style={{ height: 1, backgroundColor: T.border, marginBottom: 20 }} />
 
