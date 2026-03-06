@@ -13,23 +13,91 @@
    prompted to confirm — the cart is cleared and the new item added.
    ───────────────────────────────────────────────────────────────── */
 
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AUTH_STATUS, useAuth } from './AuthContext';
+import { getMenuRecommendations } from '../services/restaurantService';
 
 export const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cart,             setCart            ] = useState([]);
   const [cartRestaurantId, setCartRestaurantId] = useState(null);
+  const [recommendations,  setRecommendations ] = useState([]);
+  const [recoLoading,      setRecoLoading     ] = useState(false);
+  const [recoError,        setRecoError       ] = useState(null);
   const { status, openAuthModal } = useAuth();
+  const prevCartCountRef = useRef(0);
+  const recoDebounceRef = useRef(null);
 
   /* Clear cart automatically when the user logs out */
   useEffect(() => {
     if (status === AUTH_STATUS.UNAUTHENTICATED) {
       setCart([]);
       setCartRestaurantId(null);
+      setRecommendations([]);
+      setRecoError(null);
+      setRecoLoading(false);
+      prevCartCountRef.current = 0;
     }
   }, [status]);
+
+  /* Refresh AI recommendations whenever cart quantity increases (add action) */
+  useEffect(() => {
+    const currentCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+    const prevCount = prevCartCountRef.current;
+    prevCartCountRef.current = currentCount;
+
+    const isAuthenticated = status === AUTH_STATUS.AUTHENTICATED;
+    const wasItemAdded = currentCount > prevCount;
+
+    if (!isAuthenticated || !wasItemAdded) return;
+
+    const cartItems = cart.flatMap((item) => {
+      const itemId = String(item.menuItemId ?? item._id ?? item.id ?? '').trim();
+      if (!itemId) return [];
+      const quantity = Math.max(1, Number(item.quantity ?? 1));
+      return Array.from({ length: quantity }, () => itemId);
+    });
+
+    if (cartItems.length === 0) {
+      setRecommendations([]);
+      setRecoError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setRecoLoading(true);
+    setRecoError(null);
+
+    if (recoDebounceRef.current) {
+      clearTimeout(recoDebounceRef.current);
+      recoDebounceRef.current = null;
+    }
+
+    recoDebounceRef.current = setTimeout(() => {
+      getMenuRecommendations(cartItems)
+        .then((data) => {
+          if (!cancelled) setRecommendations(Array.isArray(data) ? data : []);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setRecommendations([]);
+            setRecoError(err?.message ?? 'Failed to fetch recommendations.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setRecoLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      if (recoDebounceRef.current) {
+        clearTimeout(recoDebounceRef.current);
+        recoDebounceRef.current = null;
+      }
+    };
+  }, [cart, status]);
 
   /* Open Sign In modal instead of navigating away */
   const requireAuth = useCallback(() => {
@@ -128,6 +196,9 @@ export const CartProvider = ({ children }) => {
     removeFromCart,
     updateQuantity,
     clearCart,
+    recommendations,
+    recoLoading,
+    recoError,
   };
 
   return (
