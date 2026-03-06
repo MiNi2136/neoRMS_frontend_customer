@@ -71,12 +71,16 @@ const normalise = (raw) => {
     : raw.isAvailable !== false && !inactiveStatuses.includes(statusLower);
 
   // ── Category ──────────────────────────────────────────────────────
-  const category =
+  const rawCategory =
     raw.category        ??
     raw.categoryName    ??
     raw.categoryTitle   ??
     raw.productCategory ??
     'Menu';
+
+  const category = String(rawCategory)
+    .replace(/_/g, ' ')
+    .trim();
 
   return {
     id:            raw._id ?? raw.id,
