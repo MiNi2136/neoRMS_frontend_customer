@@ -41,7 +41,7 @@ export const getRestaurantMenu = (restaurantId) =>
  *
  * IMPORTANT:
  * - Only sends request when token + tenant id are present.
- * - Returns [] when unauthenticated or payload is empty.
+ * - Sends an empty array when cart has no items.
  */
 export const getMenuRecommendations = (cartItems = []) => {
   const token = getToken();
@@ -52,8 +52,6 @@ export const getMenuRecommendations = (cartItems = []) => {
   const safeItems = Array.isArray(cartItems)
     ? cartItems.filter((item) => typeof item === 'string' && item.trim().length > 0)
     : [];
-
-  if (safeItems.length === 0) return Promise.resolve([]);
 
   return apiClient
     .post('/menuProduct/recommendation', { cartItems: safeItems })

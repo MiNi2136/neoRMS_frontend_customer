@@ -10,13 +10,15 @@
                    images[], variants[], addons[], status, ... }, ... ] }
    ───────────────────────────────────────────────────────────────── */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Utensils } from 'lucide-react';
 import FoodCard  from '../components/menu/FoodCard';
 import FoodModal from '../components/menu/FoodModal';
 import { getRestaurantMenu } from '../services/restaurantService';
 import { getReviewsByMenuProductId } from '../services/reviewService';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 /* ── Theme tokens ── */
 const T = {
@@ -78,6 +80,7 @@ const normalise = (raw) => {
 
   return {
     id:            raw._id ?? raw.id,
+    restaurantId:  raw.restaurantId ?? null,
     name:          raw.productTitle       ?? raw.name        ?? 'Unnamed Item',
     description:   raw.productDescription ?? raw.description ?? '',
     images,
@@ -191,6 +194,8 @@ const CategorySection = ({ category, onSelectItem, reviewsMap = {} }) => {
 /* ────────────────── Main Page ────────────────── */
 const RestaurantMenuPage = () => {
   const { restaurantId } = useParams();
+  const { isAuthenticated } = useAuth();
+  const { recommendations, recoLoading } = useCart();
 
   const [selected,   setSelected  ] = useState(null);
   const [activeTab,  setActiveTab ] = useState(null);
@@ -270,6 +275,23 @@ const RestaurantMenuPage = () => {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const recommendedItems = useMemo(() => {
+    if (!isAuthenticated) return [];
+
+    const seen = new Set();
+    return (Array.isArray(recommendations) ? recommendations : [])
+      .map(normalise)
+      .filter((item) => {
+        if (!item?.id) return false;
+        if (item.isAvailable === false) return false;
+        if (item.restaurantId && restaurantId && item.restaurantId !== restaurantId) return false;
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      })
+      .slice(0, 4);
+  }, [isAuthenticated, recommendations, restaurantId]);
+
   /* ── Loading ── */
   if (loading) return <Skeleton />;
 
@@ -295,6 +317,10 @@ const RestaurantMenuPage = () => {
         @keyframes rmFadeSlideUp {
           from { opacity: 0; transform: translateY(24px); }
           to   { opacity: 1; transform: translateY(0);    }
+        }
+        @keyframes rm-skel {
+          0%,100% { opacity: 1; }
+          50%     { opacity: .45; }
         }
         .rm-fade-in { animation: rmFadeSlideUp 0.55s cubic-bezier(.4,0,.2,1) both; }
 
@@ -364,6 +390,52 @@ const RestaurantMenuPage = () => {
           paddingLeft: 24, paddingRight: 24,
           paddingTop: 7, paddingBottom: 64,
         }}>
+          {isAuthenticated && (recoLoading || recommendedItems.length > 0) && (
+            <section style={{ marginTop: 16, marginBottom: 40 }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: T.primary, marginBottom: 6 }}>
+                Recommended for you
+              </h2>
+              <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>
+                Based on your current order context.
+              </p>
+
+              <div className="flex gap-5 overflow-x-auto pb-2">
+                {recoLoading
+                  ? [1, 2, 3, 4].map((idx) => (
+                      <div
+                        key={idx}
+                        className="shrink-0"
+                        style={{
+                          width: 232,
+                          borderRadius: 12,
+                          border: `1px solid ${T.border}`,
+                          background: '#F9FAFB',
+                          overflow: 'hidden',
+                          animation: 'rm-skel 1.4s ease-in-out infinite',
+                        }}
+                      >
+                        <div style={{ height: 168, background: '#E5E7EB' }} />
+                        <div style={{ padding: 12 }}>
+                          <div style={{ height: 16, background: '#E5E7EB', borderRadius: 6, marginBottom: 8 }} />
+                          <div style={{ height: 14, width: '45%', background: '#F3F4F6', borderRadius: 6 }} />
+                        </div>
+                      </div>
+                    ))
+                  : recommendedItems.map((item) => (
+                      <div key={item.id} className="shrink-0" style={{ width: 232 }}>
+                        <FoodCard
+                          item={item}
+                          reviewData={reviewsMap[item.id]}
+                          onClick={(selectedItem) =>
+                            setSelected({ ...selectedItem, ...(reviewsMap[selectedItem.id] ?? {}) })
+                          }
+                        />
+                      </div>
+                    ))}
+              </div>
+            </section>
+          )}
+
           {categories.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 0', color: T.muted }}>
               <Utensils size={44} color="#D1D5DB" style={{ marginBottom: 14 }} />

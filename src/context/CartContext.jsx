@@ -26,7 +26,6 @@ export const CartProvider = ({ children }) => {
   const [recoLoading,      setRecoLoading     ] = useState(false);
   const [recoError,        setRecoError       ] = useState(null);
   const { status, openAuthModal } = useAuth();
-  const prevCartCountRef = useRef(0);
   const recoDebounceRef = useRef(null);
 
   /* Clear cart automatically when the user logs out */
@@ -37,20 +36,13 @@ export const CartProvider = ({ children }) => {
       setRecommendations([]);
       setRecoError(null);
       setRecoLoading(false);
-      prevCartCountRef.current = 0;
     }
   }, [status]);
 
-  /* Refresh AI recommendations whenever cart quantity increases (add action) */
+  /* Refresh AI recommendations on authenticated cart changes (including empty cart) */
   useEffect(() => {
-    const currentCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-    const prevCount = prevCartCountRef.current;
-    prevCartCountRef.current = currentCount;
-
     const isAuthenticated = status === AUTH_STATUS.AUTHENTICATED;
-    const wasItemAdded = currentCount > prevCount;
-
-    if (!isAuthenticated || !wasItemAdded) return;
+    if (!isAuthenticated) return;
 
     const cartItems = cart.flatMap((item) => {
       const itemId = String(item.menuItemId ?? item._id ?? item.id ?? '').trim();
@@ -58,12 +50,6 @@ export const CartProvider = ({ children }) => {
       const quantity = Math.max(1, Number(item.quantity ?? 1));
       return Array.from({ length: quantity }, () => itemId);
     });
-
-    if (cartItems.length === 0) {
-      setRecommendations([]);
-      setRecoError(null);
-      return;
-    }
 
     let cancelled = false;
     setRecoLoading(true);
