@@ -5,6 +5,7 @@
    ───────────────────────────────────────────────────────────────── */
 
 import apiClient from './apiClient';
+import { getToken, getTenantId } from './authService';
 
 /**
  * Fetch all restaurants.
@@ -32,3 +33,30 @@ export const getRestaurantMenu = (restaurantId) =>
     if (Array.isArray(res)) return res;
     return res?.data ?? res?.items ?? res?.menu ?? res?.menuProducts ?? [];
   });
+
+/**
+ * Fetch AI recommendations for current cart items.
+ * POST /menuProduct/recommendation
+ * Body: { cartItems: string[] }
+ *
+ * IMPORTANT:
+ * - Only sends request when token + tenant id are present.
+ * - Sends an empty array when cart has no items.
+ */
+export const getMenuRecommendations = (cartItems = []) => {
+  const token = getToken();
+  const tenantId = getTenantId();
+
+  if (!token || !tenantId) return Promise.resolve([]);
+
+  const safeItems = Array.isArray(cartItems)
+    ? cartItems.filter((item) => typeof item === 'string' && item.trim().length > 0)
+    : [];
+
+  return apiClient
+    .post('/menuProduct/recommendation', { cartItems: safeItems })
+    .then((res) => {
+      if (Array.isArray(res)) return res;
+      return res?.data ?? res?.recommendations ?? [];
+    });
+};
